@@ -11,7 +11,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { getInitials, getStatusColor } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, Loader2 } from 'lucide-react';
+import { Plus, Search, Loader2, Eye, Edit } from 'lucide-react';
+import Link from 'next/link';
 
 const DEPARTMENTS = ['Sciences', 'Languages', 'Humanities', 'Mathematics', 'Arts', 'Technical', 'Administration', 'Support'];
 
@@ -21,6 +22,9 @@ export default function StaffPage() {
   const [search, setSearch] = useState('');
   const [filterDept, setFilterDept] = useState('');
   const [showAdd, setShowAdd] = useState(false);
+  const [showView, setShowView] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
+  const [selectedStaff, setSelectedStaff] = useState<Staff | null>(null);
   const [form, setForm] = useState({
     firstName: '', lastName: '', dateOfBirth: '1990-01-01', gender: 'male',
     designation: 'Teacher', department: 'Sciences', subjectsTaught: [] as string[],
@@ -50,6 +54,44 @@ export default function StaffPage() {
     },
     onError: () => toast({ title: 'Error', description: 'Failed to add staff', variant: 'destructive' }),
   });
+
+  const updateMutation = useMutation({
+    mutationFn: (data: typeof form) => api.put(`/staff/${selectedStaff?._id}`, data),
+    onSuccess: () => {
+      toast({ title: 'Staff Updated', description: 'Staff details updated successfully' });
+      qc.invalidateQueries({ queryKey: ['staff'] });
+      setShowEdit(false);
+      setSelectedStaff(null);
+    },
+    onError: () => toast({ title: 'Error', description: 'Failed to update staff', variant: 'destructive' }),
+  });
+
+  const handleEdit = (staff: Staff) => {
+    setSelectedStaff(staff);
+    setForm({
+      firstName: staff.firstName,
+      lastName: staff.lastName,
+      dateOfBirth: staff.dateOfBirth.split('T')[0],
+      gender: staff.gender,
+      designation: staff.designation,
+      department: staff.department,
+      subjectsTaught: staff.subjectsTaught,
+      employmentType: staff.employmentType,
+      employmentDate: staff.employmentDate.split('T')[0],
+      phone: staff.phone,
+      email: staff.email,
+      homeAddress: staff.homeAddress,
+      idNumber: staff.idNumber,
+      role: staff.userId?.role || 'subject_teacher',
+      emergencyContact: staff.emergencyContact,
+    });
+    setShowEdit(true);
+  };
+
+  const handleView = (staff: Staff) => {
+    setSelectedStaff(staff);
+    setShowView(true);
+  };
 
   const staff: Staff[] = data?.data || [];
 
@@ -99,6 +141,7 @@ export default function StaffPage() {
                   <TableHead>Phone</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -130,10 +173,18 @@ export default function StaffPage() {
                         {s.isActive ? 'Active' : 'Inactive'}
                       </span>
                     </TableCell>
+                    <TableCell>
+                      <div className="flex gap-1 justify-end">
+                        <Link href={`/staff/${s._id}`}>
+                          <Button variant="ghost" size="icon" className="h-8 w-8"><Eye size={14} /></Button>
+                        </Link>
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(s)}><Edit size={14} /></Button>
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))}
                 {!staff.length && (
-                  <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">No staff found</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">No staff found</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>
@@ -199,6 +250,163 @@ export default function StaffPage() {
             <Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
             <Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending}>
               {createMutation.isPending ? 'Adding...' : 'Add Staff'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Staff Dialog */}
+      <Dialog open={showView} onOpenChange={setShowView}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Staff Details</DialogTitle></DialogHeader>
+          {selectedStaff && (
+            <div className="space-y-6">
+              <div className="flex items-start gap-4 border-b pb-4">
+                <div className="h-20 w-20 rounded-full bg-purple-100 flex items-center justify-center text-2xl font-semibold text-purple-700">
+                  {getInitials(selectedStaff.firstName, selectedStaff.lastName)}
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-xl font-bold">{selectedStaff.firstName} {selectedStaff.lastName}</h3>
+                  <p className="text-sm text-muted-foreground">{selectedStaff.designation}</p>
+                  <p className="text-sm text-muted-foreground">{selectedStaff.staffId}</p>
+                </div>
+                <span className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${selectedStaff.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                  {selectedStaff.isActive ? 'Active' : 'Inactive'}
+                </span>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Gender</p>
+                  <p className="font-medium capitalize">{selectedStaff.gender}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">ID Number</p>
+                  <p className="font-medium">{selectedStaff.idNumber}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Department</p>
+                  <p className="font-medium">{selectedStaff.department}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Employment Type</p>
+                  <p className="font-medium capitalize">{selectedStaff.employmentType.replace('_', ' ')}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Phone</p>
+                  <p className="font-medium">{selectedStaff.phone}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Email</p>
+                  <p className="font-medium">{selectedStaff.email}</p>
+                </div>
+                <div className="col-span-2">
+                  <p className="text-xs text-muted-foreground mb-1">Home Address</p>
+                  <p className="font-medium">{selectedStaff.homeAddress}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">TSC Number</p>
+                  <p className="font-medium">{selectedStaff.tscNumber || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">KRA PIN</p>
+                  <p className="font-medium">{selectedStaff.kraPin || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">NHIF Number</p>
+                  <p className="font-medium">{selectedStaff.nhifNumber || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">NSSF Number</p>
+                  <p className="font-medium">{selectedStaff.nssfNumber || '—'}</p>
+                </div>
+                <div className="col-span-2">
+                  <p className="text-xs text-muted-foreground mb-1">Subjects Taught</p>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {selectedStaff.subjectsTaught.map(sub => (
+                      <span key={sub} className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-800">{sub}</span>
+                    ))}
+                  </div>
+                </div>
+                {selectedStaff.classTeacherOf && (
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Class Teacher Of</p>
+                    <p className="font-medium">{selectedStaff.classTeacherOf}</p>
+                  </div>
+                )}
+                {selectedStaff.emergencyContact && (
+                  <div className="col-span-2 border-t pt-4">
+                    <p className="text-sm font-semibold mb-2">Emergency Contact</p>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Name</p>
+                        <p className="font-medium">{selectedStaff.emergencyContact.name}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Relationship</p>
+                        <p className="font-medium">{selectedStaff.emergencyContact.relationship}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Phone</p>
+                        <p className="font-medium">{selectedStaff.emergencyContact.phone}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowView(false)}>Close</Button>
+            <Button onClick={() => { setShowView(false); selectedStaff && handleEdit(selectedStaff); }}>Edit</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Staff Dialog */}
+      <Dialog open={showEdit} onOpenChange={setShowEdit}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Edit Staff Member</DialogTitle></DialogHeader>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2"><Label>First Name *</Label><Input value={form.firstName} onChange={e => setForm({ ...form, firstName: e.target.value })} /></div>
+            <div className="space-y-2"><Label>Last Name *</Label><Input value={form.lastName} onChange={e => setForm({ ...form, lastName: e.target.value })} /></div>
+            <div className="space-y-2">
+              <Label>Gender *</Label>
+              <Select value={form.gender} onValueChange={v => setForm({ ...form, gender: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="male">Male</SelectItem><SelectItem value="female">Female</SelectItem></SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2"><Label>ID Number *</Label><Input value={form.idNumber} onChange={e => setForm({ ...form, idNumber: e.target.value })} /></div>
+            <div className="space-y-2"><Label>Designation *</Label><Input value={form.designation} onChange={e => setForm({ ...form, designation: e.target.value })} /></div>
+            <div className="space-y-2">
+              <Label>Department *</Label>
+              <Select value={form.department} onValueChange={v => setForm({ ...form, department: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{DEPARTMENTS.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Employment Type</Label>
+              <Select value={form.employmentType} onValueChange={v => setForm({ ...form, employmentType: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="permanent">Permanent</SelectItem>
+                  <SelectItem value="contract">Contract</SelectItem>
+                  <SelectItem value="part_time">Part Time</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2"><Label>Date of Birth</Label><Input type="date" value={form.dateOfBirth} onChange={e => setForm({ ...form, dateOfBirth: e.target.value })} /></div>
+            <div className="space-y-2"><Label>Phone *</Label><Input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="+254..." /></div>
+            <div className="space-y-2"><Label>Email *</Label><Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
+            <div className="space-y-2"><Label>Employment Date</Label><Input type="date" value={form.employmentDate} onChange={e => setForm({ ...form, employmentDate: e.target.value })} /></div>
+            <div className="col-span-2 space-y-2"><Label>Home Address</Label><Input value={form.homeAddress} onChange={e => setForm({ ...form, homeAddress: e.target.value })} /></div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEdit(false)}>Cancel</Button>
+            <Button onClick={() => updateMutation.mutate(form)} disabled={updateMutation.isPending}>
+              {updateMutation.isPending ? 'Updating...' : 'Update Staff'}
             </Button>
           </DialogFooter>
         </DialogContent>

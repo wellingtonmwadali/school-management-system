@@ -11,8 +11,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { formatCurrency, formatDate, getStatusColor } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import { DollarSign, TrendingUp, AlertCircle, Plus, Search, Loader2 } from 'lucide-react';
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { DollarSign, TrendingUp, AlertCircle, Plus, Search, Loader2, BarChart3 } from 'lucide-react';
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 export default function FinancePage() {
   const { toast } = useToast();
@@ -69,6 +69,16 @@ export default function FinancePage() {
         <p className="text-muted-foreground text-sm">Fee collection and financial management</p>
       </div>
 
+      <Tabs defaultValue="dashboard" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+          <TabsTrigger value="invoices">Invoices</TabsTrigger>
+          <TabsTrigger value="payments">Payments</TabsTrigger>
+        </TabsList>
+
+        {/*  FINANCE DASHBOARD TAB */}
+        <TabsContent value="dashboard" className="space-y-6">
+
       {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
@@ -121,13 +131,85 @@ export default function FinancePage() {
         </Card>
       </div>
 
-      <Tabs defaultValue="invoices">
+      {/* Fee Collection Trend */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-base">Fee Collection Trend</CardTitle>
+            <CardDescription>Monthly collection over the past 6 months</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={250}>
+              <LineChart data={monthlyTrend}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                <YAxis tick={{ fontSize: 12 }} tickFormatter={(val) => `${val/1000}K`} />
+                <Tooltip formatter={(val: number) => formatCurrency(val)} />
+                <Legend />
+                <Line type="monotone" dataKey="collected" stroke="#10b981" name="Collected" strokeWidth={2} />
+                <Line type="monotone" dataKey="expected" stroke="#3b82f6" name="Expected" strokeWidth={2} />
+              </LineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        {/* Collection by Class */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Collection Rate by Class</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={byClass} layout="vertical">
+                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 12 }} unit="%" />
+                <YAxis dataKey="class" type="category" tick={{ fontSize: 12 }} width={60} />
+                <Tooltip formatter={(v) => [`${v}%`, 'Collection Rate']} />
+                <Bar dataKey="collectionRate" fill="#10b981" radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        {/* Outstanding Balances by Class */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Outstanding by Class</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {byClass.map((c: any) => (
+                <div key={c.class} className="space-y-1">
+                  <div className="flex justify-between text-sm">
+                    <span className="font-medium">{c.class}</span>
+                    <span className="text-red-700 font-bold">{formatCurrency(c.outstanding || 0)}</span>
+                  </div>
+                  <div className="h-2 bg-muted rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-red-500 rounded-full"
+                      style={{ width: `${(c.outstanding / (c.collected + c.outstanding)) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+        </TabsContent>
+
+        {/* INVOICES TAB */}
+        <TabsContent value="invoices" className="space-y-6">
+
+      <Tabs defaultValue="dashboard" className="space-y-6">
         <TabsList>
-          <TabsTrigger value="invoices">Fee Invoices</TabsTrigger>
+          <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+          <TabsTrigger value="invoices">Invoices</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="invoices" className="space-y-4">
+        {/* DASHBOARD TAB */}
+        <TabsContent value="dashboard" className="space-y-6">
           {/* Filters */}
           <Card>
             <CardContent className="p-4">

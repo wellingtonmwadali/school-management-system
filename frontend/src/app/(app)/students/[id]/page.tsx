@@ -48,6 +48,15 @@ export default function StudentDetailPage() {
     enabled: !!studentId,
   });
 
+  const { data: borrowedBooks } = useQuery({
+    queryKey: ['student-library', studentId],
+    queryFn: async () => {
+      const res = await api.get(`/library/borrowings?borrowerId=${studentId}&borrowerType=student`);
+      return res.data.data || [];
+    },
+    enabled: !!studentId,
+  });
+
   if (isLoading) {
     return <div className="p-8 text-center text-muted-foreground">Loading student details...</div>;
   }
@@ -469,7 +478,7 @@ export default function StudentDetailPage() {
               <CardDescription>Borrowed books and reading history</CardDescription>
             </CardHeader>
             <CardContent>
-              {student.libraryBooks && student.libraryBooks.length > 0 ? (
+              {borrowedBooks && borrowedBooks.length > 0 ? (
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -481,19 +490,23 @@ export default function StudentDetailPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {student.libraryBooks.map((book: any, idx: number) => (
-                      <TableRow key={idx}>
-                        <TableCell className="font-medium">{book.title}</TableCell>
-                        <TableCell>{book.author}</TableCell>
-                        <TableCell>{formatDate(book.borrowedDate)}</TableCell>
-                        <TableCell>{formatDate(book.dueDate)}</TableCell>
-                        <TableCell>
-                          <Badge variant={book.returned ? 'default' : new Date(book.dueDate) < new Date() ? 'destructive' : 'secondary'}>
-                            {book.returned ? 'Returned' : new Date(book.dueDate) < new Date() ? 'Overdue' : 'Borrowed'}
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {borrowedBooks.map((borrowing: any) => {
+                      const isOverdue = !borrowing.returnDate && new Date(borrowing.dueDate) < new Date();
+                      const isReturned = !!borrowing.returnDate;
+                      return (
+                        <TableRow key={borrowing._id}>
+                          <TableCell className="font-medium">{borrowing.book?.title || 'Unknown'}</TableCell>
+                          <TableCell>{borrowing.book?.author || 'N/A'}</TableCell>
+                          <TableCell>{formatDate(borrowing.borrowDate)}</TableCell>
+                          <TableCell>{formatDate(borrowing.dueDate)}</TableCell>
+                          <TableCell>
+                            <Badge variant={isReturned ? 'default' : isOverdue ? 'destructive' : 'secondary'}>
+                              {isReturned ? 'Returned' : isOverdue ? 'Overdue' : 'Borrowed'}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               ) : (

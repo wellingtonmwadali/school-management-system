@@ -38,17 +38,41 @@ export interface Student {
 export interface Staff {
   _id: string;
   staffId: string;
+  staffNumber?: string;
   firstName: string;
   lastName: string;
+  dateOfBirth: string;
+  gender: 'male' | 'female' | 'other';
+  nationality?: string;
+  idNumber: string;
+  kraPin?: string;
+  nhifNumber?: string;
+  nssfNumber?: string;
+  tscNumber?: string;
+  bloodGroup?: string;
+  photo?: string;
   designation: string;
   department: string;
   subjectsTaught: string[];
   classTeacherOf?: string;
   hodOf?: string;
+  employmentType: 'permanent' | 'contract' | 'part_time' | 'intern';
+  employmentDate: string;
+  dateOfJoining?: string;
+  position?: string;
+  status?: string;
+  qualification?: string;
+  specialization?: string;
   phone: string;
+  phoneNumber?: string;
   email: string;
-  employmentType: string;
+  homeAddress: string;
+  residentialAddress?: string;
+  postalAddress?: string;
+  alternatePhone?: string;
+  emergencyContact?: { name: string; relationship: string; phone: string };
   isActive: boolean;
+  userId?: { role: string };
 }
 
 export interface FeeInvoice {

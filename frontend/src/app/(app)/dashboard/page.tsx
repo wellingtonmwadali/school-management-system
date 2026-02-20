@@ -78,52 +78,51 @@ export default function DashboardPage() {
         />
         <StatsCard
           title="Today's Attendance" value={`${metrics?.todayAttendanceRate || 0}%`}
-          subtitle={`${metrics?.todayPresent || 0} present, ${metrics?.todayAbsent || 0} absent`}
+          subtitle={`${metrics?.todayPresent || 0} present`}
           icon={UserCheck} iconColor="text-green-600"
-        />
-        <StatsCard
-          title="Fee Collected" value={formatCurrency(metrics?.feeCollected || 0)}
-          subtitle={`${metrics?.feeCollectionRate || 0}% collection rate`}
-          icon={DollarSign} iconColor="text-emerald-600"
         />
         <StatsCard
           title="Total Staff" value={metrics?.totalStaff || 0}
           subtitle="Active employees" icon={Users} iconColor="text-purple-600"
         />
+        <StatsCard
+          title="This Week" value={new Date().toLocaleDateString('en', { weekday: 'short', month: 'short', day: 'numeric' })}
+          subtitle="Academic calendar" icon={Clock} iconColor="text-orange-600"
+        />
       </div>
 
-      {/* Alert Metrics */}
+      {/* Information Cards - Non-Sensitive */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="border-orange-200 bg-orange-50">
+        <Card className="border-blue-200 bg-blue-50">
           <CardContent className="flex items-center gap-4 p-5">
-            <div className="rounded-full p-2 bg-orange-100">
-              <AlertTriangle size={20} className="text-orange-600" />
+            <div className="rounded-full p-2 bg-blue-100">
+              <GraduationCap size={20} className="text-blue-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-orange-700">{metrics?.atRiskStudents || 0}</p>
-              <p className="text-sm text-orange-600">Students at risk (below 75% attendance)</p>
+              <p className="text-2xl font-bold text-blue-700">{metrics?.activeClasses || 4}</p>
+              <p className="text-sm text-blue-600">Active Classes</p>
             </div>
           </CardContent>
         </Card>
-        <Card className="border-yellow-200 bg-yellow-50">
+        <Card className="border-green-200 bg-green-50">
           <CardContent className="flex items-center gap-4 p-5">
-            <div className="rounded-full p-2 bg-yellow-100">
-              <Clock size={20} className="text-yellow-600" />
+            <div className="rounded-full p-2 bg-green-100">
+              <UserCheck size={20} className="text-green-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-yellow-700">{metrics?.pendingLeaves || 0}</p>
-              <p className="text-sm text-yellow-600">Pending leave requests</p>
+              <p className="text-2xl font-bold text-green-700">{metrics?.avgAttendanceRate || 0}%</p>
+              <p className="text-sm text-green-600">Average Attendance (This Week)</p>
             </div>
           </CardContent>
         </Card>
-        <Card className="border-red-200 bg-red-50">
+        <Card className="border-purple-200 bg-purple-50">
           <CardContent className="flex items-center gap-4 p-5">
-            <div className="rounded-full p-2 bg-red-100">
-              <AlertTriangle size={20} className="text-red-600" />
+            <div className="rounded-full p-2 bg-purple-100">
+              <Users size={20} className="text-purple-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-red-700">{metrics?.openIncidents || 0}</p>
-              <p className="text-sm text-red-600">Open discipline cases</p>
+              <p className="text-2xl font-bold text-purple-700">{metrics?.teachingStaff || 0}</p>
+              <p className="text-sm text-purple-600">Teaching Staff</p>
             </div>
           </CardContent>
         </Card>
@@ -183,37 +182,19 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* Fee Collection by Class */}
+      {/* Recent Activity and Announcements */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Fee Collection Rate by Class</CardTitle>
-            <CardDescription>Current term collection percentage</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={feeData} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 12 }} unit="%" />
-                <YAxis dataKey="class" type="category" tick={{ fontSize: 12 }} width={60} />
-                <Tooltip formatter={(v) => [`${v}%`, 'Collection Rate']} />
-                <Bar dataKey="collected" fill="#10b981" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
         {/* Recent Announcements */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
-              <Megaphone size={16} /> Recent Announcements
+              <Megaphone size={16} /> School Announcements
             </CardTitle>
           </CardHeader>
           <CardContent>
             {dashData?.recentAnnouncements?.length ? (
               <ul className="space-y-3">
-                {dashData.recentAnnouncements.slice(0, 4).map((ann: { _id: string; title: string; createdAt: string; audience: string[]; isPinned: boolean }) => (
+                {dashData.recentAnnouncements.slice(0, 5).map((ann: { _id: string; title: string; createdAt: string; audience: string[]; isPinned: boolean }) => (
                   <li key={ann._id} className="flex items-start gap-3 pb-3 border-b last:border-0 last:pb-0">
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{ann.title}</p>
@@ -226,6 +207,33 @@ export default function DashboardPage() {
             ) : (
               <p className="text-sm text-muted-foreground text-center py-6">No announcements yet</p>
             )}
+          </CardContent>
+        </Card>
+
+        {/* Quick Links */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Quick Actions</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-3">
+              <a href="/attendance" className="p-4 border rounded-lg hover:bg-accent transition-colors">
+                <UserCheck size={20} className="text-green-600 mb-2" />
+                <p className="text-sm font-medium">Mark Attendance</p>
+              </a>
+              <a href="/students" className="p-4 border rounded-lg hover:bg-accent transition-colors">
+                <GraduationCap size={20} className="text-blue-600 mb-2" />
+                <p className="text-sm font-medium">View Students</p>
+              </a>
+              <a href="/library" className="p-4 border rounded-lg hover:bg-accent transition-colors">
+                <Users size={20} className="text-purple-600 mb-2" />
+                <p className="text-sm font-medium">Library</p>
+              </a>
+              <a href="/academics/timetable" className="p-4 border rounded-lg hover:bg-accent transition-colors">
+                <Clock size={20} className="text-orange-600 mb-2" />
+                <p className="text-sm font-medium">Timetable</p>
+              </a>
+            </div>
           </CardContent>
         </Card>
       </div>

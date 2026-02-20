@@ -111,11 +111,15 @@ export default function AttendancePage() {
         </div>
       </div>
 
-      <Tabs defaultValue="students" className="space-y-6">
+      <Tabs defaultValue="mark" className="space-y-6">
         <TabsList>
-          <TabsTrigger value="students" className="gap-2">
+          <TabsTrigger value="mark" className="gap-2">
             <UserCheck size={16} />
-            Student Attendance
+            Mark Attendance
+          </TabsTrigger>
+          <TabsTrigger value="trends" className="gap-2">
+            <BarChart size={16} />
+            Trends & Reports
           </TabsTrigger>
           <TabsTrigger value="staff" className="gap-2">
             <Users size={16} />
@@ -123,8 +127,8 @@ export default function AttendancePage() {
           </TabsTrigger>
         </TabsList>
 
-        {/* STUDENT ATTENDANCE TAB */}
-        <TabsContent value="students" className="space-y-6">
+        {/* MARK ATTENDANCE TAB */}
+        <TabsContent value="mark" className="space-y-6">
           {/* Stats Row */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
@@ -279,6 +283,92 @@ export default function AttendancePage() {
           </CardContent>
         </Card>
       </div>
+        </TabsContent>
+
+        {/* ATTENDANCE TRENDS TAB */}
+        <TabsContent value="trends" className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Attendance Trend Chart */}
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <CardTitle className="text-base">Attendance Trend (Last 7 Days)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={250}>
+                  <BarChart data={summaryStats.slice(-7)}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                    <XAxis dataKey="date" tick={{ fontSize: 12 }} tickFormatter={(val) => new Date(val).toLocaleDateString('en', { month: 'short', day: 'numeric' })} />
+                    <YAxis tick={{ fontSize: 12 }} />
+                    <Tooltip labelFormatter={(val) => formatDate(val)} />
+                    <Bar dataKey="present" fill="#10b981" name="Present" />
+                    <Bar dataKey="absent" fill="#ef4444" name="Absent" />
+                    <Bar dataKey="late" fill="#f59e0b" name="Late" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            {/* Summary Statistics */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">This Week Summary</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">Average Attendance</span>
+                    <span className="text-lg font-bold text-green-700">
+                      {summaryStats.length ? Math.round((summaryStats.reduce((acc: number, s: any) => acc + (s.present || 0), 0) / summaryStats.length)) : 0}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">Total Absences</span>
+                    <span className="text-lg font-bold text-red-700">
+                      {summaryStats.reduce((acc: number, s: any) => acc + (s.absent || 0), 0)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">Total Late</span>
+                    <span className="text-lg font-bold text-yellow-700">
+                      {summaryStats.reduce((acc: number, s: any) => acc + (s.late || 0), 0)}
+                    </span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Class Breakdown */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Today's Class Breakdown</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {summaryData?.byClass?.length > 0 ? (
+                  <div className="space-y-3">
+                    {summaryData.byClass.map((c: any) => (
+                      <div key={c._id} className="space-y-1">
+                        <div className="flex justify-between text-sm">
+                          <span className="font-medium">{c._id}</span>
+                          <span className="text-muted-foreground">{c.total} students</span>
+                        </div>
+                        <div className="h-2 bg-muted rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-green-500 rounded-full"
+                            style={{ width: `${(c.present / c.total) * 100}%` }}
+                          />
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {c.present} present, {c.absent} absent, {c.late} late
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-center py-8 text-muted-foreground text-sm">No data available</p>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         {/* STAFF ATTENDANCE TAB */}
