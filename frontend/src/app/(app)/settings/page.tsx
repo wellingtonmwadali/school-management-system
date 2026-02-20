@@ -735,7 +735,7 @@ function ApproversTab() {
             <Button 
               variant={bulkMode ? "outline" : "default"} 
               size="sm" 
-              onClick={() => { setBulkMode(false); setSelectedSubjects([]; setSelectAllStaff(false); setSelectAllStudents(false); }}
+              onClick={() => { setBulkMode(false); setSelectedSubjects([]); setSelectAllStaff(false); setSelectAllStudents(false); }}
             >
               Single Assignment
             </Button>
