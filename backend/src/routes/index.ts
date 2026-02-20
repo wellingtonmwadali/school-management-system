@@ -3,22 +3,26 @@ import { protect, authorize } from '../middleware/auth';
 import { login, getMe, changePassword, createSchoolAndAdmin } from '../controllers/authController';
 import { getStudents, getStudent, createStudent, updateStudent, deleteStudent, getStudentStats, bulkPromote } from '../controllers/studentController';
 import { markAttendance, getClassAttendance, getStudentAttendance, getAttendanceSummary, getAbsenteeList } from '../controllers/attendanceController';
-import { getExams, createExam, updateExam, enterMarks, getStudentReport, getClassResults, getSubjectAnalysis } from '../controllers/examController';
+import { getExams, createExam, updateExam, enterMarks, getStudentReport, getClassResults, getSubjectAnalysis, getExamSchedule, uploadExamSchedule, addExamSchedule, uploadMarks, getMarksSummary } from '../controllers/examController';
 import { generateClassInvoices, getInvoices, recordPayment, getFeeStats, getStudentFeeHistory } from '../controllers/feeController';
 import {
   getConfig, updateConfig,
-  getStaff, createStaff, updateStaff,
+  getStaff, createStaff, updateStaff, getUpcomingEvents,
   applyLeave, reviewLeave, getLeaves,
   createIncident, getIncidents, updateIncident,
-  createCase, getCases,
+  createCase, getCases, updateCase, addCaseSession,
   getBooks, createBook, checkoutBook, returnBook,
-  createClinicVisit, getClinicVisits,
+  createClinicVisit, getClinicVisits, updateClinicVisit,
   createAnnouncement, getAnnouncements,
   getNotifications, markNotificationRead,
   getUsers, toggleUserStatus,
+  getDailyQuote, getQuotes, createQuote,
 } from '../controllers/otherControllers';
 import { getPrincipalDashboard, getFinanceDashboard, getTeacherDashboard, getStudentDashboard } from '../controllers/dashboardController';
 import { clockIn, clockOut, getStaffAttendance, getMyAttendance, getTodayStatus } from '../controllers/staffAttendanceController';
+import { getTimetable, getUpcomingClasses, uploadTimetable, addTimetableEntry } from '../controllers/timetableController';
+import { getClassAssignments, assignClassTeacher, removeClassAssignment, getMyClassAssignment } from '../controllers/classAssignmentController';
+import { createRequest, getRequests, getMyRequests, reviewRequest, getLeaveBalance, getApproverSettings, setApprover } from '../controllers/requestController';
 
 // Import rate limiters and validation
 import { authLimiter, paymentLimiter, uploadLimiter, exportLimiter } from '../middleware/rateLimiter';
@@ -35,7 +39,9 @@ import {
   validatePagination,
 } from '../middleware/validation';
 import { cacheHelper } from '../utils/cache';
+import multer from 'multer';
 
+const upload = multer({ storage: multer.memoryStorage() });
 const router = Router();
 
 // Auth (public)
@@ -71,6 +77,7 @@ router.post('/students/bulk-promote', protect, authorize('principal', 'deputy_pr
 router.get('/staff', protect, validatePagination, cacheHelper.medium, getStaff);
 router.post('/staff', protect, authorize('principal', 'super_admin'), uploadLimiter, createStaff);
 router.put('/staff/:id', protect, authorize('principal', 'super_admin', 'deputy_principal'), validateMongoId, updateStaff);
+router.get('/staff/upcoming-events', protect, cacheHelper.short, getUpcomingEvents);
 
 // Staff Attendance
 router.post('/staff-attendance/clock-in', protect, clockIn);
@@ -95,6 +102,25 @@ router.get('/marks/student/:studentId/exam/:examId', protect, validateMongoId, c
 router.get('/marks/class', protect, cacheHelper.medium, getClassResults);
 router.get('/marks/analysis/:examId', protect, validateMongoId, exportLimiter, cacheHelper.long, getSubjectAnalysis);
 
+// Exam Schedules
+router.get('/exams/schedule', protect, cacheHelper.medium, getExamSchedule);
+router.post('/exams/schedule', protect, authorize('principal', 'deputy_principal', 'hod'), addExamSchedule);
+router.post('/exams/schedule/upload', protect, authorize('principal', 'deputy_principal', 'hod'), upload.single('file'), uploadExamSchedule);
+router.post('/exams/marks/upload', protect, authorize('principal', 'deputy_principal', 'subject_teacher', 'class_teacher'), upload.single('file'), uploadMarks);
+router.get('/exams/marks/summary', protect, cacheHelper.medium, getMarksSummary);
+
+// Timetable
+router.get('/timetable', protect, cacheHelper.medium, getTimetable);
+router.get('/timetable/upcoming', protect, cacheHelper.short, getUpcomingClasses);
+router.post('/timetable/upload', protect, authorize('principal', 'deputy_principal'), upload.single('file'), uploadTimetable);
+router.post('/timetable/entries', protect, authorize('principal', 'deputy_principal'), addTimetableEntry);
+
+// Settings - Class Assignments
+router.get('/settings/class-assignments', protect, cacheHelper.medium, getClassAssignments);
+router.post('/settings/assign-class-teacher', protect, authorize('principal', 'super_admin', 'deputy_principal'), assignClassTeacher);
+router.delete('/settings/class-assignments/:id', protect, authorize('principal', 'super_admin', 'deputy_principal'), validateMongoId, removeClassAssignment);
+router.get('/settings/my-class-assignment', protect, cacheHelper.medium, getMyClassAssignment);
+
 // Fees
 router.post('/fees/generate-invoices', protect, authorize('finance_officer', 'principal'), validateFeeInvoice, generateClassInvoices);
 router.get('/fees/invoices', protect, validatePagination, cacheHelper.short, getInvoices);
@@ -108,8 +134,10 @@ router.post('/discipline', protect, createIncident);
 router.put('/discipline/:id', protect, validateMongoId, updateIncident);
 
 // Counseling
-router.get('/counseling', protect, validatePagination, cacheHelper.medium, getCases);
-router.post('/counseling', protect, createCase);
+router.get('/counseling/cases', protect, validatePagination, cacheHelper.medium, getCases);
+router.post('/counseling/cases', protect, createCase);
+router.put('/counseling/cases/:id', protect, validateMongoId, updateCase);
+router.post('/counseling/cases/:id/sessions', protect, validateMongoId, addCaseSession);
 
 // Library
 router.get('/library/books', protect, validatePagination, cacheHelper.long, getBooks);
@@ -118,17 +146,34 @@ router.post('/library/checkout', protect, authorize('librarian'), checkoutBook);
 router.put('/library/return/:id', protect, authorize('librarian'), validateMongoId, returnBook);
 
 // Medical
-router.get('/medical', protect, validatePagination, cacheHelper.medium, getClinicVisits);
-router.post('/medical', protect, createClinicVisit);
+router.get('/medical/visits', protect, validatePagination, cacheHelper.medium, getClinicVisits);
+router.post('/medical/visits', protect, createClinicVisit);
+router.patch('/medical/visits/:id', protect, validateMongoId, updateClinicVisit);
+
+// Quotes
+router.get('/quotes/daily', protect, cacheHelper.long, getDailyQuote);
+router.get('/quotes', protect, cacheHelper.long, getQuotes);
+router.post('/quotes', protect, authorize('principal', 'super_admin'), createQuote);
 
 // Leave
 router.get('/leave', protect, getLeaves);
 router.post('/leave', protect, applyLeave);
 router.put('/leave/:id/review', protect, authorize('principal', 'deputy_principal', 'hod'), reviewLeave);
 
+// Requests (new unified system)
+router.get('/requests', protect, getRequests);
+router.get('/requests/my', protect, getMyRequests);
+router.post('/requests', protect, createRequest);
+router.put('/requests/:id/review', protect, validateMongoId, reviewRequest);
+router.get('/requests/leave-balance', protect, getLeaveBalance);
+
+// Approver settings
+router.get('/settings/approvers', protect, authorize('principal', 'super_admin'), getApproverSettings);
+router.post('/settings/approvers', protect, authorize('principal', 'super_admin'), setApprover);
+
 // Announcements
 router.get('/announcements', protect, getAnnouncements);
-router.post('/announcements', protect, createAnnouncement);
+router.post('/announcements', protect, authorize('principal', 'super_admin', 'deputy_principal'), createAnnouncement);
 
 // Notifications
 router.get('/notifications', protect, getNotifications);

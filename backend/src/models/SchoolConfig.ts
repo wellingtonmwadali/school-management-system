@@ -104,6 +104,21 @@ export interface ISchoolConfig extends Document {
     options?: string[];
   }[];
   
+  // Tab visibility settings
+  tabSettings: {
+    tabName: string;
+    isVisible: boolean;
+    roles: string[]; // Roles that can see this tab
+  }[];
+  
+  // Role settings
+  roleSettings: {
+    roleName: string;
+    displayName: string;
+    permissions: string[];
+    isActive: boolean;
+  }[];
+  
   createdAt: Date;
   updatedAt: Date;
 }
@@ -197,6 +212,48 @@ const SchoolConfigSchema = new Schema<ISchoolConfig>(
     dateFormat: { type: String, default: 'DD/MM/YYYY' },
     theme: { type: String, default: 'default' },
     customFields: { type: [], default: [] },
+    
+    // Tab visibility settings
+    tabSettings: {
+      type: [{
+        tabName: String,
+        isVisible: { type: Boolean, default: true },
+        roles: [String],
+      }],
+      default: [
+        { tabName: 'dashboard', isVisible: true, roles: ['all'] },
+        { tabName: 'students', isVisible: true, roles: ['principal', 'super_admin', 'deputy_principal', 'class_teacher'] },
+        { tabName: 'staff', isVisible: true, roles: ['principal', 'super_admin', 'deputy_principal'] },
+        { tabName: 'attendance', isVisible: true, roles: ['principal', 'super_admin', 'class_teacher', 'deputy_principal'] },
+        { tabName: 'academics', isVisible: true, roles: ['principal', 'super_admin', 'hod', 'class_teacher', 'subject_teacher'] },
+        { tabName: 'finance', isVisible: true, roles: ['principal', 'super_admin', 'finance_officer'] },
+        { tabName: 'library', isVisible: true, roles: ['principal', 'super_admin', 'librarian'] },
+        { tabName: 'medical', isVisible: true, roles: ['principal', 'super_admin', 'nurse'] },
+        { tabName: 'requests', isVisible: true, roles: ['all'] },
+        { tabName: 'settings', isVisible: true, roles: ['principal', 'super_admin'] },
+      ],
+    },
+    
+    // Role settings
+    roleSettings: {
+      type: [{
+        roleName: String,
+        displayName: String,
+        permissions: [String],
+        isActive: { type: Boolean, default: true },
+      }],
+      default: [
+        { roleName: 'principal', displayName: 'Principal', permissions: ['all'], isActive: true },
+        { roleName: 'super_admin', displayName: 'Super Admin', permissions: ['all'], isActive: true },
+        { roleName: 'deputy_principal', displayName: 'Deputy Principal', permissions: ['manage_students', 'manage_staff', 'view_reports'], isActive: true },
+        { roleName: 'class_teacher', displayName: 'Class Teacher', permissions: ['manage_students', 'mark_attendance', 'enter_marks'], isActive: true },
+        { roleName: 'subject_teacher', displayName: 'Subject Teacher', permissions: ['view_students', 'enter_marks'], isActive: true },
+        { roleName: 'nurse', displayName: 'Nurse', permissions: ['manage_medical', 'create_medical_requests'], isActive: true },
+        { roleName: 'librarian', displayName: 'Librarian', permissions: ['manage_library'], isActive: true },
+        { roleName: 'finance_officer', displayName: 'Finance Officer', permissions: ['manage_fees', 'generate_reports'], isActive: true },
+        { roleName: 'parent', displayName: 'Parent', permissions: ['view_child_performance', 'view_child_fees'], isActive: true },
+      ],
+    },
   },
   { timestamps: true }
 );

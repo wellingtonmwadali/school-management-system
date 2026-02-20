@@ -80,17 +80,17 @@ export default function MedicalPage() {
 
   const [form, setForm] = useState({
     studentId: '',
-    visitType: 'Sick Visit',
-    symptoms: '',
-    diagnosis: '',
-    severity: 'Minor',
-    temperature: '',
-    bloodPressure: '',
-    medication: [{ name: '', dosage: '', frequency: '', duration: '' }],
+    date: new Date().toISOString().split('T')[0],
+    time: new Date().toTimeString().split(' ')[0].substring(0, 5),
+    complaint: '',
+    assessment: '',
     treatment: '',
-    notes: '',
-    followUpRequired: false,
+    medicationDispensed: [{ name: '', dosage: '', quantity: 0 }],
+    referredToHospital: false,
+    hospitalName: '',
+    parentNotified: false,
     followUpDate: '',
+    notes: '',
   });
 
   // Search students
@@ -130,9 +130,18 @@ export default function MedicalPage() {
   const createVisitMutation = useMutation({
     mutationFn: async (data: typeof form) => {
       const payload = {
-        ...data,
-        temperature: data.temperature ? parseFloat(data.temperature) : undefined,
-        medication: data.medication.filter(m => m.name && m.dosage),
+        studentId: data.studentId,
+        date: data.date,
+        time: data.time,
+        complaint: data.complaint,
+        assessment: data.assessment,
+        treatment: data.treatment,
+        medicationDispensed: data.medicationDispensed.filter(m => m.name && m.dosage),
+        referredToHospital: data.referredToHospital,
+        hospitalName: data.referredToHospital ? data.hospitalName : undefined,
+        parentNotified: data.parentNotified,
+        followUpDate: data.followUpDate || undefined,
+        notes: data.notes,
       };
       return api.post('/medical/visits', payload);
     },
@@ -165,17 +174,17 @@ export default function MedicalPage() {
   const resetForm = () => {
     setForm({
       studentId: '',
-      visitType: 'Sick Visit',
-      symptoms: '',
-      diagnosis: '',
-      severity: 'Minor',
-      temperature: '',
-      bloodPressure: '',
-      medication: [{ name: '', dosage: '', frequency: '', duration: '' }],
+      date: new Date().toISOString().split('T')[0],
+      time: new Date().toTimeString().split(' ')[0].substring(0, 5),
+      complaint: '',
+      assessment: '',
       treatment: '',
-      notes: '',
-      followUpRequired: false,
+      medicationDispensed: [{ name: '', dosage: '', quantity: 0 }],
+      referredToHospital: false,
+      hospitalName: '',
+      parentNotified: false,
       followUpDate: '',
+      notes: '',
     });
     setSelectedStudent(null);
     setStudentSearch('');
@@ -184,21 +193,21 @@ export default function MedicalPage() {
   const addMedication = () => {
     setForm({
       ...form,
-      medication: [...form.medication, { name: '', dosage: '', frequency: '', duration: '' }],
+      medicationDispensed: [...form.medicationDispensed, { name: '', dosage: '', quantity: 0 }],
     });
   };
 
   const removeMedication = (index: number) => {
     setForm({
       ...form,
-      medication: form.medication.filter((_, i) => i !== index),
+      medicationDispensed: form.medicationDispensed.filter((_, i) => i !== index),
     });
   };
 
-  const updateMedication = (index: number, field: string, value: string) => {
-    const updated = [...form.medication];
+  const updateMedication = (index: number, field: string, value: string | number) => {
+    const updated = [...form.medicationDispensed];
     updated[index] = { ...updated[index], [field]: value };
-    setForm({ ...form, medication: updated });
+    setForm({ ...form, medicationDispensed: updated });
   };
 
   const selectStudent = (student: any) => {
@@ -489,80 +498,43 @@ export default function MedicalPage() {
             {/* Visit Details */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Visit Type *</Label>
-                <Select
-                  value={form.visitType}
-                  onValueChange={(v) => setForm({ ...form, visitType: v })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {VISIT_TYPES.map((type) => (
-                      <SelectItem key={type} value={type}>
-                        {type}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Severity *</Label>
-                <Select
-                  value={form.severity}
-                  onValueChange={(v) => setForm({ ...form, severity: v })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {SEVERITY_LEVELS.map((level) => (
-                      <SelectItem key={level} value={level}>
-                        {level}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Temperature (°C)</Label>
+                <Label>Date *</Label>
                 <Input
-                  type="number"
-                  step="0.1"
-                  value={form.temperature}
-                  onChange={(e) => setForm({ ...form, temperature: e.target.value })}
-                  placeholder="36.5"
+                  type="date"
+                  value={form.date}
+                  onChange={(e) => setForm({ ...form, date: e.target.value })}
+                  required
                 />
               </div>
 
               <div className="space-y-2">
-                <Label>Blood Pressure</Label>
+                <Label>Time *</Label>
                 <Input
-                  value={form.bloodPressure}
-                  onChange={(e) => setForm({ ...form, bloodPressure: e.target.value })}
-                  placeholder="120/80"
+                  type="time"
+                  value={form.time}
+                  onChange={(e) => setForm({ ...form, time: e.target.value })}
+                  required
                 />
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label>Symptoms *</Label>
+              <Label>Complaint *</Label>
               <Textarea
-                value={form.symptoms}
-                onChange={(e) => setForm({ ...form, symptoms: e.target.value })}
-                placeholder="Describe the symptoms..."
+                value={form.complaint}
+                onChange={(e) => setForm({ ...form, complaint: e.target.value })}
+                placeholder="Describe the student's complaint or symptoms..."
                 rows={3}
+                required
               />
             </div>
 
             <div className="space-y-2">
-              <Label>Diagnosis</Label>
+              <Label>Assessment</Label>
               <Textarea
-                value={form.diagnosis}
-                onChange={(e) => setForm({ ...form, diagnosis: e.target.value })}
-                placeholder="Medical diagnosis..."
+                value={form.assessment}
+                onChange={(e) => setForm({ ...form, assessment: e.target.value })}
+                placeholder="Medical assessment or diagnosis..."
                 rows={2}
               />
             </div>
@@ -577,10 +549,10 @@ export default function MedicalPage() {
                 </Button>
               </div>
 
-              {form.medication.map((med, index) => (
+              {form.medicationDispensed.map((med, index) => (
                 <Card key={index}>
                   <CardContent className="p-4">
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-3 gap-3">
                       <div className="space-y-2">
                         <Label>Medication Name</Label>
                         <Select
@@ -610,25 +582,17 @@ export default function MedicalPage() {
                       </div>
 
                       <div className="space-y-2">
-                        <Label>Frequency</Label>
+                        <Label>Quantity</Label>
                         <Input
-                          value={med.frequency}
-                          onChange={(e) => updateMedication(index, 'frequency', e.target.value)}
-                          placeholder="e.g., 3 times daily"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>Duration</Label>
-                        <Input
-                          value={med.duration}
-                          onChange={(e) => updateMedication(index, 'duration', e.target.value)}
-                          placeholder="e.g., 5 days"
+                          type="number"
+                          value={med.quantity}
+                          onChange={(e) => updateMedication(index, 'quantity', parseInt(e.target.value) || 0)}
+                          placeholder="e.g., 10"
                         />
                       </div>
                     </div>
 
-                    {form.medication.length > 1 && (
+                    {form.medicationDispensed.length > 1 && (
                       <Button
                         type="button"
                         variant="ghost"
@@ -664,31 +628,55 @@ export default function MedicalPage() {
               />
             </div>
 
-            {/* Follow-up */}
+            {/* Hospital Referral */}
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
-                  id="followUp"
-                  checked={form.followUpRequired}
+                  id="referredToHospital"
+                  checked={form.referredToHospital}
                   onChange={(e) =>
-                    setForm({ ...form, followUpRequired: e.target.checked })
+                    setForm({ ...form, referredToHospital: e.target.checked })
                   }
                   className="h-4 w-4"
                 />
-                <Label htmlFor="followUp">Follow-up Required</Label>
+                <Label htmlFor="referredToHospital">Referred to Hospital</Label>
               </div>
 
-              {form.followUpRequired && (
+              {form.referredToHospital && (
                 <div className="space-y-2">
-                  <Label>Follow-up Date</Label>
+                  <Label>Hospital Name</Label>
                   <Input
-                    type="date"
-                    value={form.followUpDate}
-                    onChange={(e) => setForm({ ...form, followUpDate: e.target.value })}
+                    value={form.hospitalName}
+                    onChange={(e) => setForm({ ...form, hospitalName: e.target.value })}
+                    placeholder="Enter hospital name"
                   />
                 </div>
               )}
+            </div>
+
+            {/* Parent Notification */}
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="parentNotified"
+                checked={form.parentNotified}
+                onChange={(e) =>
+                  setForm({ ...form, parentNotified: e.target.checked })
+                }
+                className="h-4 w-4"
+              />
+              <Label htmlFor="parentNotified">Parent/Guardian Notified</Label>
+            </div>
+
+            {/* Follow-up Date */}
+            <div className="space-y-2">
+              <Label>Follow-up Date (Optional)</Label>
+              <Input
+                type="date"
+                value={form.followUpDate}
+                onChange={(e) => setForm({ ...form, followUpDate: e.target.value })}
+              />
             </div>
           </div>
 
@@ -698,7 +686,7 @@ export default function MedicalPage() {
             </Button>
             <Button
               onClick={() => createVisitMutation.mutate(form)}
-              disabled={!form.studentId || !form.symptoms || createVisitMutation.isPending}
+              disabled={!form.studentId || !form.date || !form.time || !form.complaint || createVisitMutation.isPending}
             >
               {createVisitMutation.isPending ? 'Saving...' : 'Record Visit'}
             </Button>

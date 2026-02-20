@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
+import { useAuthStore } from '@/store/auth';
 import { Student } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input, Label } from '@/components/ui/input';
@@ -15,7 +16,6 @@ import { Avatar, AvatarFallback } from '@/components/ui/badge';
 import { formatDate, getInitials, getStatusColor } from '@/lib/utils';
 import { Plus, Search, Download, Filter, Eye, Edit } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { useAuthStore } from '@/store/auth';
 import { getFeaturePermissions } from '@/lib/rbac';
 import Link from 'next/link';
 
@@ -30,6 +30,8 @@ export default function StudentsPage() {
   const [filterClass, setFilterClass] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [showAdd, setShowAdd] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [page, setPage] = useState(1);
 
   const [form, setForm] = useState({
@@ -41,7 +43,7 @@ export default function StudentsPage() {
     residentialAddress: '', postalAddress: '',
     admissionDate: new Date().toISOString().split('T')[0],
     yearOfJoining: new Date().getFullYear(),
-    previousSchool: '', house: '',
+    previousSchool: '', house: '', status: 'active' as 'active' | 'suspended' | 'expelled' | 'transferred' | 'graduated' | 'dropout',
     medicalConditions: [] as string[], allergies: [] as string[], medications: [] as string[],
     medicalInsurance: '',
     father: { name: '', idNumber: '', phone: '', email: '', occupation: '', employer: '' },
@@ -74,6 +76,65 @@ export default function StudentsPage() {
     },
     onError: () => toast({ title: 'Error', description: 'Failed to add student', variant: 'destructive' }),
   });
+
+  const updateMutation = useMutation({
+    mutationFn: (data: typeof form) => api.put(`/students/${selectedStudent?._id}`, data),
+    onSuccess: async () => {
+      toast({ title: 'Student Updated', description: 'Student information updated successfully' });
+      qc.invalidateQueries({ queryKey: ['students'] });
+      // Refresh current user data if they updated themselves  
+      const { refreshUser } = useAuthStore.getState();
+      await refreshUser();
+      setShowEdit(false);
+      setSelectedStudent(null);
+    },
+    onError: () => toast({ title: 'Error', description: 'Failed to update student', variant: 'destructive' }),
+  });
+
+  const handleEdit = (student: Student) => {
+    setSelectedStudent(student);
+    setForm({
+      firstName: student.firstName,
+      lastName: student.lastName,
+      middleName: student.middleName || '',
+      dateOfBirth: student.dateOfBirth.split('T')[0],
+      gender: student.gender,
+      nationality: student.nationality || 'Kenyan',
+      religion: student.religion || '',
+      bloodGroup: student.bloodGroup || '',
+      hasDisability: student.hasDisability || false,
+      disabilityDetails: student.disabilityDetails || '',
+      idNumber: student.idNumber || '',
+      nemisNumber: student.nemisNumber || '',
+      kcpeIndexNumber: student.kcpeIndexNumber || '',
+      kcpeScore: student.kcpeScore?.toString() || '',
+      currentClass: student.currentClass,
+      currentStream: student.currentStream,
+      residentialAddress: student.residentialAddress || '',
+      postalAddress: student.postalAddress || '',
+      admissionDate: student.admissionDate.split('T')[0],
+      yearOfJoining: student.yearOfJoining,
+      previousSchool: student.previousSchool || '',
+      house: student.house || '',
+      status: student.status,
+      medicalConditions: student.medicalConditions || [],
+      allergies: student.allergies || [],
+      medications: student.medications || [],
+      medicalInsurance: student.medicalInsurance || '',
+      father: student.father || { name: '', idNumber: '', phone: '', email: '', occupation: '', employer: '' },
+      mother: student.mother || { name: '', idNumber: '', phone: '', email: '', occupation: '', employer: '' },
+      guardian: student.guardian || { name: '', relationship: '', phone: '', email: '', idNumber: '' },
+      primaryContactType: student.primaryContactType || 'father',
+      emergencyContacts: student.emergencyContacts || [{ name: '', relationship: '', phone: '' }],
+      isBoarding: student.isBoarding || false,
+      dormitory: student.dormitory || '',
+      roomNumber: student.roomNumber || '',
+      bedNumber: student.bedNumber || '',
+      usesTransport: student.usesTransport || false,
+      transportRoute: student.transportRoute || '',
+    });
+    setShowEdit(true);
+  };
 
   const students: Student[] = data?.data || [];
   const total = data?.total || 0;
@@ -225,9 +286,7 @@ export default function StudentsPage() {
                           <Button variant="ghost" size="icon" className="h-8 w-8"><Eye size={14} /></Button>
                         </Link>
                         {permissions.canEdit && (
-                          <Link href={`/students/${s._id}/edit`}>
-                            <Button variant="ghost" size="icon" className="h-8 w-8"><Edit size={14} /></Button>
-                          </Link>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(s)}><Edit size={14} /></Button>
                         )}
                       </div>
                     </TableCell>
@@ -377,6 +436,20 @@ export default function StudentsPage() {
                 <div className="space-y-2">
                   <Label>KCPE Index Number</Label>
                   <Input value={form.kcpeIndexNumber} onChange={e => setForm({ ...form, kcpeIndexNumber: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Status</Label>
+                  <Select value={form.status} onValueChange={v => setForm({ ...form, status: v as any })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="suspended">Suspended</SelectItem>
+                      <SelectItem value="expelled">Expelled</SelectItem>
+                      <SelectItem value="transferred">Transferred</SelectItem>
+                      <SelectItem value="graduated">Graduated</SelectItem>
+                      <SelectItem value="dropout">Dropout</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label>KCPE Score</Label>
@@ -549,6 +622,133 @@ export default function StudentsPage() {
             <Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
             <Button onClick={() => createMutation.mutate(form)} disabled={createMutation.isPending}>
               {createMutation.isPending ? 'Adding...' : 'Enroll Student'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Student Dialog */}
+      <Dialog open={showEdit} onOpenChange={setShowEdit}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Student</DialogTitle>
+          </DialogHeader>
+          <Tabs defaultValue="personal" className="w-full">
+            <TabsList className="grid w-full grid-cols-5">
+              <TabsTrigger value="personal">Personal</TabsTrigger>
+              <TabsTrigger value="academic">Academic</TabsTrigger>
+              <TabsTrigger value="family">Family</TabsTrigger>
+              <TabsTrigger value="medical">Medical</TabsTrigger>
+              <TabsTrigger value="other">Other</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="personal" className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>First Name *</Label>
+                  <Input value={form.firstName} onChange={e => setForm({ ...form, firstName: e.target.value })} placeholder="First name" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Last Name *</Label>
+                  <Input value={form.lastName} onChange={e => setForm({ ...form, lastName: e.target.value })} placeholder="Last name" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Middle Name</Label>
+                  <Input value={form.middleName} onChange={e => setForm({ ...form, middleName: e.target.value })} placeholder="Middle name" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Date of Birth *</Label>
+                  <Input type="date" value={form.dateOfBirth} onChange={e => setForm({ ...form, dateOfBirth: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Gender *</Label>
+                  <Select value={form.gender} onValueChange={v => setForm({ ...form, gender: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="male">Male</SelectItem>
+                      <SelectItem value="female">Female</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Nationality</Label>
+                  <Input value={form.nationality} onChange={e => setForm({ ...form, nationality: e.target.value })} />
+                </div>
+              </div>
+            </TabsContent>
+            
+            <TabsContent value="academic" className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Class *</Label>
+                  <Select value={form.currentClass} onValueChange={v => setForm({ ...form, currentClass: v, currentStream: `${v} East` })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {CLASS_OPTIONS.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Stream *</Label>
+                  <Select value={form.currentStream} onValueChange={v => setForm({ ...form, currentStream: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {['East', 'West', 'North'].map(s => (
+                        <SelectItem key={s} value={`${form.currentClass} ${s}`}>{form.currentClass} {s}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Status</Label>
+                  <Select value={form.status} onValueChange={v => setForm({ ...form, status: v as any })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="suspended">Suspended</SelectItem>
+                      <SelectItem value="expelled">Expelled</SelectItem>
+                      <SelectItem value="transferred">Transferred</SelectItem>
+                      <SelectItem value="graduated">Graduated</SelectItem>
+                      <SelectItem value="dropout">Dropout</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="family" className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2"><h3 className="text-sm font-semibold">Father Information</h3></div>
+                <div className="space-y-2"><Label>Name</Label><Input value={form.father.name} onChange={e => setForm({ ...form, father: { ...form.father, name: e.target.value } })} /></div>
+                <div className="space-y-2"><Label>Phone</Label><Input value={form.father.phone} onChange={e => setForm({ ...form, father: { ...form.father, phone: e.target.value } })} /></div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="medical" className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Medical Insurance</Label>
+                  <Input value={form.medicalInsurance} onChange={e => setForm({ ...form, medicalInsurance: e.target.value })} />
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="other" className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2 flex items-end">
+                  <label className="flex items-center gap-2">
+                    <input type="checkbox" checked={form.isBoarding} onChange={e => setForm({ ...form, isBoarding: e.target.checked })} className="h-4 w-4" />
+                    <span className="text-sm">Boarding Student</span>
+                  </label>
+                </div>
+              </div>
+            </TabsContent>
+          </Tabs>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEdit(false)}>Cancel</Button>
+            <Button onClick={() => updateMutation.mutate(form)} disabled={updateMutation.isPending}>
+              {updateMutation.isPending ? 'Updating...' : 'Update Student'}
             </Button>
           </DialogFooter>
         </DialogContent>

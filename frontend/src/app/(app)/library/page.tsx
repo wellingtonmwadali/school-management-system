@@ -284,13 +284,13 @@ export default function LibraryPage() {
               <div className="space-y-2"><Label>Subject</Label><Input value={form.subject} onChange={e => setForm({ ...form, subject: e.target.value })} /></div>
               <div className="space-y-2"><Label>Publisher</Label><Input value={form.publisher} onChange={e => setForm({ ...form, publisher: e.target.value })} /></div>
               <div className="space-y-2"><Label>Year</Label><Input type="number" value={form.year} onChange={e => setForm({ ...form, year: parseInt(e.target.value) })} /></div>
-              <div className="space-y-2"><Label>Location Code</Label><Input value={form.locationCode} onChange={e => setForm({ ...form, locationCode: e.target.value })} placeholder="e.g. SCI-001" /></div>
+              <div className="space-y-2"><Label>Location Code *</Label><Input value={form.locationCode} onChange={e => setForm({ ...form, locationCode: e.target.value })} placeholder="e.g. SCI-001" required /></div>
               <div className="space-y-2"><Label>Total Copies</Label><Input type="number" value={form.totalCopies} min={1} onChange={e => setForm({ ...form, totalCopies: parseInt(e.target.value) })} /></div>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
-            <Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !form.title || !form.author}>
+            <Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !form.title || !form.author || !form.locationCode}>
               {createMutation.isPending ? 'Adding...' : 'Add Book'}
             </Button>
           </DialogFooter>

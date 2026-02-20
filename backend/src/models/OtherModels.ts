@@ -196,8 +196,29 @@ const ClinicVisitSchema = new Schema<IClinicVisit>(
   { timestamps: true }
 );
 
+// ========== QUOTES ==========
+export interface IQuote extends Document {
+  text: string;
+  author: string;
+  category: string;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const QuoteSchema = new Schema<IQuote>(
+  {
+    text: { type: String, required: true },
+    author: { type: String, required: true },
+    category: { type: String, enum: ['education', 'motivation', 'success', 'leadership', 'wisdom', 'general'], default: 'general' },
+    isActive: { type: Boolean, default: true },
+  },
+  { timestamps: true }
+);
+
 export const DisciplineIncident = mongoose.model<IDisciplineIncident>('DisciplineIncident', DisciplineIncidentSchema);
 export const CounselingCase = mongoose.model<ICounselingCase>('CounselingCase', CounselingCaseSchema);
 export const Book = mongoose.model<IBook>('Book', BookSchema);
 export const BookBorrowing = mongoose.model<IBookBorrowing>('BookBorrowing', BookBorrowingSchema);
 export const ClinicVisit = mongoose.model<IClinicVisit>('ClinicVisit', ClinicVisitSchema);
+export const Quote = mongoose.model<IQuote>('Quote', QuoteSchema);

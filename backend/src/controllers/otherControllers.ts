@@ -2,7 +2,7 @@ import { Response } from 'express';
 import SchoolConfig from '../models/SchoolConfig';
 import Staff from '../models/Staff';
 import User from '../models/User';
-import { DisciplineIncident, CounselingCase, Book, BookBorrowing, ClinicVisit } from '../models/OtherModels';
+import { DisciplineIncident, CounselingCase, Book, BookBorrowing, ClinicVisit, Quote } from '../models/OtherModels';
 import { Announcement, Notification, LeaveRequest } from '../models/Operations';
 import { AuthRequest } from '../types';
 
@@ -65,6 +65,76 @@ export const updateStaff = async (req: AuthRequest, res: Response): Promise<void
   res.json({ success: true, data: staff });
 };
 
+// Get upcoming staff events (birthdays and anniversaries)
+export const getUpcomingEvents = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const schoolId = req.user?.schoolId;
+    const today = new Date();
+    const currentMonth = today.getMonth() + 1;
+    const currentYear = today.getFullYear();
+
+    // Get all staff with necessary fields
+    const staff = await Staff.find({ schoolId }).select('firstName lastName dateOfBirth employmentDate department photo');
+
+    // Filter birthdays this month
+    const birthdays = staff
+      .filter((s) => {
+        if (!s.dateOfBirth) return false;
+        const dob = new Date(s.dateOfBirth);
+        return dob.getMonth() + 1 === currentMonth;
+      })
+      .map((s) => ({
+        _id: s._id,
+        firstName: s.firstName,
+        lastName: s.lastName,
+        dateOfBirth: s.dateOfBirth,
+        department: s.department || 'Staff',
+        photo: s.photo || null,
+      }))
+      .sort((a, b) => {
+        const dateA = new Date(a.dateOfBirth!).getDate();
+        const dateB = new Date(b.dateOfBirth!).getDate();
+        return dateA - dateB;
+      });
+
+    // Filter work anniversaries this month
+    const anniversaries = staff
+      .filter((s) => {
+        if (!s.employmentDate) return false;
+        const empDate = new Date(s.employmentDate);
+        return empDate.getMonth() + 1 === currentMonth && empDate.getFullYear() < currentYear;
+      })
+      .map((s) => {
+        const empDate = new Date(s.employmentDate!);
+        const yearsOfService = currentYear - empDate.getFullYear();
+        return {
+          _id: s._id,
+          firstName: s.firstName,
+          lastName: s.lastName,
+          employmentDate: s.employmentDate,
+          department: s.department || 'Staff',
+          photo: s.photo || null,
+          yearsOfService,
+        };
+      })
+      .sort((a, b) => {
+        const dateA = new Date(a.employmentDate!).getDate();
+        const dateB = new Date(b.employmentDate!).getDate();
+        return dateA - dateB;
+      });
+
+    res.json({
+      success: true,
+      data: {
+        birthdays,
+        anniversaries,
+      },
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // ========== LEAVE ==========
 export const applyLeave = async (req: AuthRequest, res: Response): Promise<void> => {
   const mongoose = require('mongoose');
@@ -103,13 +173,14 @@ export const createIncident = async (req: AuthRequest, res: Response): Promise<v
 };
 
 export const getIncidents = async (req: AuthRequest, res: Response): Promise<void> => {
-  const { studentId, status, category } = req.query;
+  const { studentId, status, category, severity } = req.query;
   const query: Record<string, unknown> = { schoolId: req.user?.schoolId };
   if (studentId) query.studentId = studentId;
   if (status) query.status = status;
   if (category) query.category = category;
+  if (severity) query.severity = severity;
 
-  const incidents = await DisciplineIncident.find(query).populate('studentId', 'firstName lastName admissionNumber').sort({ date: -1 });
+  const incidents = await DisciplineIncident.find(query).populate('studentId', 'firstName lastName currentStream admissionNumber').sort({ date: -1 });
   res.json({ success: true, data: incidents });
 };
 
@@ -128,12 +199,40 @@ export const createCase = async (req: AuthRequest, res: Response): Promise<void>
 };
 
 export const getCases = async (req: AuthRequest, res: Response): Promise<void> => {
-  const { status, studentId } = req.query;
+  const { status, studentId, isUrgent } = req.query;
   const query: Record<string, unknown> = { schoolId: req.user?.schoolId };
   if (status) query.status = status;
   if (studentId) query.studentId = studentId;
-  const cases = await CounselingCase.find(query).populate('studentId', 'firstName lastName admissionNumber').sort({ createdAt: -1 });
+  if (isUrgent === 'true') query.isUrgent = true;
+  const cases = await CounselingCase.find(query)
+    .populate('studentId', 'firstName lastName admissionNumber currentStream')
+    .populate('counselorId', 'firstName lastName')
+    .sort({ createdAt: -1 });
   res.json({ success: true, data: cases });
+};
+
+export const updateCase = async (req: AuthRequest, res: Response): Promise<void> => {
+  const caseItem = await CounselingCase.findOneAndUpdate(
+    { _id: req.params.id, schoolId: req.user?.schoolId },
+    req.body,
+    { new: true, runValidators: true }
+  );
+  if (!caseItem) {
+    res.status(404).json({ success: false, message: 'Counseling case not found' });
+    return;
+  }
+  res.json({ success: true, data: caseItem });
+};
+
+export const addCaseSession = async (req: AuthRequest, res: Response): Promise<void> => {
+  const caseItem = await CounselingCase.findOne({ _id: req.params.id, schoolId: req.user?.schoolId });
+  if (!caseItem) {
+    res.status(404).json({ success: false, message: 'Counseling case not found' });
+    return;
+  }
+  caseItem.sessions.push(req.body);
+  await caseItem.save();
+  res.json({ success: true, data: caseItem });
 };
 
 // ========== LIBRARY ==========
@@ -193,6 +292,19 @@ export const getClinicVisits = async (req: AuthRequest, res: Response): Promise<
   res.json({ success: true, data: visits });
 };
 
+export const updateClinicVisit = async (req: AuthRequest, res: Response): Promise<void> => {
+  const visit = await ClinicVisit.findOneAndUpdate(
+    { _id: req.params.id, schoolId: req.user?.schoolId },
+    req.body,
+    { new: true, runValidators: true }
+  );
+  if (!visit) {
+    res.status(404).json({ success: false, message: 'Clinic visit not found' });
+    return;
+  }
+  res.json({ success: true, data: visit });
+};
+
 // ========== ANNOUNCEMENTS ==========
 export const createAnnouncement = async (req: AuthRequest, res: Response): Promise<void> => {
   const ann = await Announcement.create({ ...req.body, schoolId: req.user?.schoolId, createdBy: req.user?.id });
@@ -231,4 +343,39 @@ export const toggleUserStatus = async (req: AuthRequest, res: Response): Promise
   user.isActive = !user.isActive;
   await user.save({ validateBeforeSave: false });
   res.json({ success: true, data: { isActive: user.isActive } });
+};
+
+// ========== QUOTES ==========
+export const getDailyQuote = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    // Get total count of active quotes
+    const count = await Quote.countDocuments({ isActive: true });
+    
+    if (count === 0) {
+      res.json({ success: true, data: null });
+      return;
+    }
+    
+    // Use current date to get a deterministic but rotating index
+    const today = new Date();
+    const dayOfYear = Math.floor((today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) / 86400000);
+    const index = dayOfYear % count;
+    
+    // Get the quote at that index
+    const quote = await Quote.findOne({ isActive: true }).skip(index).limit(1);
+    
+    res.json({ success: true, data: quote });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error fetching daily quote' });
+  }
+};
+
+export const getQuotes = async (req: AuthRequest, res: Response): Promise<void> => {
+  const quotes = await Quote.find({ isActive: true }).sort({ createdAt: -1 });
+  res.json({ success: true, data: quotes });
+};
+
+export const createQuote = async (req: AuthRequest, res: Response): Promise<void> => {
+  const quote = await Quote.create(req.body);
+  res.status(201).json({ success: true, data: quote });
 };

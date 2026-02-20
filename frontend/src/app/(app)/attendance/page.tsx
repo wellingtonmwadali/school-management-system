@@ -22,11 +22,23 @@ export default function AttendancePage() {
   const { toast } = useToast();
   const { user } = useAuthStore();
   const qc = useQueryClient();
+  const isAdmin = user?.role === 'principal' || user?.role === 'super_admin' || user?.role === 'deputy_principal';
+  const isClassTeacher = user?.role === 'class_teacher';
   const [selectedClass, setSelectedClass] = useState('Form 1');
   const [selectedStream, setSelectedStream] = useState('Form 1 East');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [staffDate, setStaffDate] = useState(new Date().toISOString().split('T')[0]);
   const [attendanceMap, setAttendanceMap] = useState<Record<string, 'present' | 'absent' | 'late' | 'excused'>>({});
+
+  // Get class teacher's assigned class
+  const { data: myClass } = useQuery({
+    queryKey: ['my-class', user?.id],
+    queryFn: async () => {
+      const res = await api.get('/settings/my-class-assignment');
+      return res.data.data;
+    },
+    enabled: isClassTeacher,
+  });
 
   const { data: students, isLoading } = useQuery({
     queryKey: ['students-for-att', selectedClass, selectedStream],
@@ -113,24 +125,42 @@ export default function AttendancePage() {
 
       <Tabs defaultValue="mark" className="space-y-6">
         <TabsList>
-          <TabsTrigger value="mark" className="gap-2">
-            <UserCheck size={16} />
-            Mark Attendance
-          </TabsTrigger>
-          <TabsTrigger value="trends" className="gap-2">
-            <BarChart size={16} />
-            Trends & Reports
-          </TabsTrigger>
-          <TabsTrigger value="staff" className="gap-2">
-            <Users size={16} />
-            Staff Attendance
-          </TabsTrigger>
+          {(isClassTeacher || isAdmin) && (
+            <TabsTrigger value="mark" className="gap-2">
+              <UserCheck size={16} />
+              Mark Attendance
+            </TabsTrigger>
+          )}
+          {isAdmin && (
+            <TabsTrigger value="trends" className="gap-2">
+              <BarChart size={16} />
+              Trends & Reports
+            </TabsTrigger>
+          )}
+          {isAdmin && (
+            <TabsTrigger value="staff" className="gap-2">
+              <Users size={16} />
+              Staff Performance
+            </TabsTrigger>
+          )}
         </TabsList>
 
         {/* MARK ATTENDANCE TAB */}
         <TabsContent value="mark" className="space-y-6">
-          {/* Stats Row */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {isClassTeacher && !myClass ? (
+            <Card>
+              <CardContent className="p-12 text-center">
+                <AlertCircle size={48} className="mx-auto text-muted-foreground mb-4" />
+                <p className="text-lg font-medium">No Class Assigned</p>
+                <p className="text-sm text-muted-foreground mt-2">
+                  You don't have a class assigned to you. Please contact the administrator.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              {/* Stats Row */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
           <CardContent className="p-5 flex items-center gap-4">
             <div className="rounded-full p-2 bg-green-100"><UserCheck size={20} className="text-green-600" /></div>
@@ -173,20 +203,30 @@ export default function AttendancePage() {
               <div className="flex flex-wrap gap-3 mb-4">
                 <input type="date" value={date} onChange={e => setDate(e.target.value)}
                   className="h-9 rounded-md border border-input bg-background px-3 text-sm" />
-                <Select value={selectedClass} onValueChange={v => { setSelectedClass(v); setSelectedStream(`${v} East`); }}>
-                  <SelectTrigger className="h-9 w-28"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {CLASS_OPTIONS.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <Select value={selectedStream} onValueChange={setSelectedStream}>
-                  <SelectTrigger className="h-9 w-36"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {STREAM_SUFFIX.map(s => (
-                      <SelectItem key={s} value={`${selectedClass} ${s}`}>{selectedClass} {s}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {isClassTeacher ? (
+                  <>
+                    <div className="h-9 px-3 rounded-md border bg-muted flex items-center text-sm">
+                      {myClass?.class} {myClass?.stream}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <Select value={selectedClass} onValueChange={v => { setSelectedClass(v); setSelectedStream(`${v} East`); }}>
+                      <SelectTrigger className="h-9 w-28"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {CLASS_OPTIONS.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <Select value={selectedStream} onValueChange={setSelectedStream}>
+                      <SelectTrigger className="h-9 w-36"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {STREAM_SUFFIX.map(s => (
+                          <SelectItem key={s} value={`${selectedClass} ${s}`}>{selectedClass} {s}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </>
+                )}
                 <Button variant="outline" size="sm" onClick={() => markAll('present')}>Mark All Present</Button>
                 <Button variant="outline" size="sm" onClick={() => markAll('absent')}>Mark All Absent</Button>
               </div>
@@ -283,9 +323,11 @@ export default function AttendancePage() {
           </CardContent>
         </Card>
       </div>
+            </>
+          )}
         </TabsContent>
 
-        {/* ATTENDANCE TRENDS TAB */}
+        {/* ATTENDANCE TRENDS TAB - Admin Only */}
         <TabsContent value="trends" className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Attendance Trend Chart */}

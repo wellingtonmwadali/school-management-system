@@ -77,9 +77,15 @@ export const validatePayment = [
 
 // Attendance validation
 export const validateAttendance = [
-  body('studentId').isMongoId().withMessage('Valid student ID required'),
   body('date').isISO8601().withMessage('Valid date required'),
-  body('status').isIn(['present', 'absent', 'late', 'excused']).withMessage('Invalid attendance status'),
+  body('class').notEmpty().withMessage('Class is required'),
+  body('stream').notEmpty().withMessage('Stream is required'),
+  body('academicYear').notEmpty().withMessage('Academic year is required'),
+  body('term').isInt({ min: 1, max: 3 }).withMessage('Term must be 1, 2, or 3'),
+  body('records').isArray({ min: 1 }).withMessage('At least one attendance record required'),
+  body('records.*.studentId').isMongoId().withMessage('Valid student ID required'),
+  body('records.*.morningStatus').isIn(['present', 'absent', 'late', 'excused']).withMessage('Invalid morning status'),
+  body('records.*.afternoonStatus').optional().isIn(['present', 'absent', 'late', 'excused']).withMessage('Invalid afternoon status'),
   validate
 ];
 

@@ -1,7 +1,11 @@
 import { Response } from 'express';
 import { Exam, SubjectPaper, Mark } from '../models/Exam';
+import ExamSchedule from '../models/ExamSchedule';
+import Student from '../models/Student';
 import SchoolConfig from '../models/SchoolConfig';
 import { AuthRequest } from '../types';
+import csv from 'csv-parser';
+import { Readable } from 'stream';
 
 const computeGrade = (percentage: number, gradingSchema: { letter: string; minScore: number; maxScore: number; points: number; remark: string }[]) => {
   const grade = gradingSchema.find(g => percentage >= g.minScore && percentage <= g.maxScore);
@@ -186,4 +190,238 @@ export const getSubjectAnalysis = async (req: AuthRequest, res: Response): Promi
   ]);
 
   res.json({ success: true, data: analysis });
+};
+
+// ===== EXAM SCHEDULE FUNCTIONS =====
+
+// Get exam schedule
+export const getExamSchedule = async (req: AuthRequest, res: Response) => {
+  try {
+    const { class: className, stream, type } = req.query;
+    const schoolId = req.user?.schoolId;
+
+    const schedule = await ExamSchedule.find({
+      schoolId,
+      class: className,
+      stream,
+      examType: type,
+    }).sort({ date: 1, time: 1 });
+
+    res.json({
+      success: true,
+      data: schedule,
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Upload exam schedule from CSV
+export const uploadExamSchedule = async (req: AuthRequest, res: Response) => {
+  try {
+    const { class: className, stream, type } = req.body;
+    const schoolId = req.user?.schoolId;
+    const file = req.file;
+
+    if (!file) {
+      return res.status(400).json({ success: false, message: 'No file uploaded' });
+    }
+
+    const results: any[] = [];
+    const fileContent = file.buffer.toString('utf-8');
+
+    const readable = Readable.from(fileContent);
+    readable
+      .pipe(csv())
+      .on('data', (data) => results.push(data))
+      .on('end', async () => {
+        try {
+          const academicYear = new Date().getFullYear().toString();
+          const scheduleEntries = results.map((row) => ({
+            schoolId,
+            class: className,
+            stream,
+            examType: type,
+            subject: row.Subject || row.subject,
+            date: new Date(row.Date || row.date),
+            time: row.Time || row.time,
+            duration: row.Duration || row.duration,
+            venue: row.Venue || row.venue,
+            academicYear,
+            term: 1,
+          }));
+
+          await ExamSchedule.insertMany(scheduleEntries);
+
+          res.json({
+            success: true,
+            message: `Exam schedule uploaded successfully. ${scheduleEntries.length} entries created.`,
+          });
+        } catch (error: any) {
+          res.status(500).json({ success: false, message: error.message });
+        }
+      });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Add single exam schedule entry
+export const addExamSchedule = async (req: AuthRequest, res: Response) => {
+  try {
+    const { class: className, stream, type, subject, date, time, duration, venue } = req.body;
+    const schoolId = req.user?.schoolId;
+    const academicYear = new Date().getFullYear().toString();
+
+    const entry = await ExamSchedule.create({
+      schoolId,
+      class: className,
+      stream,
+      examType: type,
+      subject,
+      date,
+      time,
+      duration,
+      venue,
+      academicYear,
+      term: 1,
+    });
+
+    res.json({
+      success: true,
+      data: entry,
+      message: 'Exam schedule entry added successfully',
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Upload marks from CSV
+export const uploadMarks = async (req: AuthRequest, res: Response) => {
+  try {
+    const { class: className, stream, type } = req.body;
+    const schoolId = req.user?.schoolId;
+    const file = req.file;
+
+    if (!file) {
+      return res.status(400).json({ success: false, message: 'No file uploaded' });
+    }
+
+    const results: any[] = [];
+    const fileContent = file.buffer.toString('utf-8');
+
+    const readable = Readable.from(fileContent);
+    readable
+      .pipe(csv())
+      .on('data', (data) => results.push(data))
+      .on('end', async () => {
+        try {
+          const academicYear = new Date().getFullYear().toString();
+          const marksEntries = [];
+
+          for (const row of results) {
+            const admissionNumber = row['Admission Number'] || row.admissionNumber;
+            const subject = row.Subject || row.subject;
+            const score = parseFloat(row.Score || row.score);
+            const grade = row.Grade || row.grade;
+
+            // Find student
+            const student = await Student.findOne({ schoolId, admissionNumber });
+            if (!student) continue;
+
+            marksEntries.push({
+              schoolId,
+              studentId: student._id,
+              subject,
+              examType: type,
+              score,
+              grade,
+              academicYear,
+              term: 1,
+              class: className,
+              stream,
+            });
+          }
+
+          await Mark.insertMany(marksEntries);
+
+          res.json({
+            success: true,
+            message: `Marks uploaded successfully. ${marksEntries.length} entries created.`,
+          });
+        } catch (error: any) {
+          res.status(500).json({ success: false, message: error.message });
+        }
+      });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Get marks summary
+export const getMarksSummary = async (req: AuthRequest, res: Response) => {
+  try {
+    const { class: className, stream, type } = req.query;
+    const schoolId = req.user?.schoolId;
+
+    const marks = await Mark.find({
+      schoolId,
+      class: className,
+      stream,
+      examType: type,
+    });
+
+    // Group by subject
+    const subjectMap: any = {};
+    marks.forEach((mark) => {
+      if (!subjectMap[mark.subject]) {
+        subjectMap[mark.subject] = {
+          subject: mark.subject,
+          scores: [],
+          totalStudents: 0,
+        };
+      }
+      subjectMap[mark.subject].scores.push(mark.marksObtained || mark.percentage || 0);
+      subjectMap[mark.subject].totalStudents++;
+    });
+
+    // Calculate statistics
+    const summary = Object.values(subjectMap).map((sub: any) => {
+      const scores = sub.scores;
+      const average = scores.reduce((a: number, b: number) => a + b, 0) / scores.length;
+      const highest = Math.max(...scores);
+      const lowest = Math.min(...scores);
+
+      // Calculate mean grade
+      let meanGrade = 'E';
+      if (average >= 80) meanGrade = 'A';
+      else if (average >= 75) meanGrade = 'A-';
+      else if (average >= 70) meanGrade = 'B+';
+      else if (average >= 65) meanGrade = 'B';
+      else if (average >= 60) meanGrade = 'B-';
+      else if (average >= 55) meanGrade = 'C+';
+      else if (average >= 50) meanGrade = 'C';
+      else if (average >= 45) meanGrade = 'C-';
+      else if (average >= 40) meanGrade = 'D+';
+      else if (average >= 35) meanGrade = 'D';
+      else if (average >= 30) meanGrade = 'D-';
+
+      return {
+        subject: sub.subject,
+        totalStudents: sub.totalStudents,
+        average,
+        highest,
+        lowest,
+        meanGrade,
+      };
+    });
+
+    res.json({
+      success: true,
+      data: summary,
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
 };

@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useSearchParams, useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import { SchoolConfig } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -14,7 +15,18 @@ import { Save, Plus, Trash2, Loader2 } from 'lucide-react';
 export default function SettingsPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [config, setConfig] = useState<Partial<SchoolConfig>>({});
+  const [activeTab, setActiveTab] = useState(() => searchParams.get('tab') || 'school');
+
+  // Update active tab when URL changes
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
 
   const { data, isLoading } = useQuery({
     queryKey: ['config'],
@@ -36,6 +48,11 @@ export default function SettingsPage() {
 
   const updateField = (field: string, value: unknown) => setConfig(prev => ({ ...prev, [field]: value }));
 
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+    router.push(`/settings?tab=${value}`);
+  };
+
   if (isLoading) return <div className="flex items-center justify-center h-48"><Loader2 className="animate-spin" /></div>;
 
   return (
@@ -51,13 +68,18 @@ export default function SettingsPage() {
         </Button>
       </div>
 
-      <Tabs defaultValue="school">
+      <Tabs value={activeTab} onValueChange={handleTabChange}>
         <TabsList className="flex flex-wrap h-auto gap-1">
           <TabsTrigger value="school">School Info</TabsTrigger>
           <TabsTrigger value="academic">Academic</TabsTrigger>
           <TabsTrigger value="grading">Grading</TabsTrigger>
           <TabsTrigger value="fees">Fee Items</TabsTrigger>
           <TabsTrigger value="timetable">Timetable</TabsTrigger>
+          <TabsTrigger value="classes">Class Assignments</TabsTrigger>
+          <TabsTrigger value="approvers">Approvers</TabsTrigger>
+          <TabsTrigger value="roles">Roles & Permissions</TabsTrigger>
+          <TabsTrigger value="tabs">Tab Visibility</TabsTrigger>
+          <TabsTrigger value="announcements">Announcements</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
         </TabsList>
 
@@ -371,6 +393,11 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
 
+        {/* Class Assignments */}
+        <TabsContent value="classes">
+          <ClassAssignmentsTab />
+        </TabsContent>
+
         {/* Notifications */}
         <TabsContent value="notifications">
           <Card>
@@ -398,7 +425,675 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Approvers */}
+        <TabsContent value="approvers">
+          <ApproversTab />
+        </TabsContent>
+
+        {/* Roles & Permissions */}
+        <TabsContent value="roles">
+          <RolesTab config={config} updateField={updateField} />
+        </TabsContent>
+
+        {/* Tab Visibility */}
+        <TabsContent value="tabs">
+          <TabVisibilityTab config={config} updateField={updateField} />
+        </TabsContent>
+
+        {/* Announcements */}
+        <TabsContent value="announcements">
+          <AnnouncementsTab />
+        </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+// Class Assignments Component
+function ClassAssignmentsTab() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [selectedClass, setSelectedClass] = useState('');
+  const [selectedStream, setSelectedStream] = useState('');
+  const [selectedTeacher, setSelectedTeacher] = useState('');
+
+  const { data: classes } = useQuery({
+    queryKey: ['class-assignments'],
+    queryFn: async () => {
+      const res = await api.get('/settings/class-assignments');
+      return res.data.data || [];
+    },
+  });
+
+  const { data: teachers } = useQuery({
+    queryKey: ['teachers-list'],
+    queryFn: async () => {
+      const res = await api.get('/staff?role=teacher');
+      return res.data.data || [];
+    },
+  });
+
+  const assignMutation = useMutation({
+    mutationFn: (data: { class: string; stream: string; teacherId: string }) => 
+      api.post('/settings/assign-class-teacher', data),
+    onSuccess: () => {
+      toast({ title: 'Success', description: 'Class teacher assigned successfully' });
+      qc.invalidateQueries({ queryKey: ['class-assignments'] });
+      setSelectedClass('');
+      setSelectedStream('');
+      setSelectedTeacher('');
+    },
+    onError: () => toast({ title: 'Error', description: 'Failed to assign class teacher', variant: 'destructive' }),
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: (assignmentId: string) => api.delete(`/settings/class-assignments/${assignmentId}`),
+    onSuccess: () => {
+      toast({ title: 'Removed', description: 'Class teacher assignment removed' });
+      qc.invalidateQueries({ queryKey: ['class-assignments'] });
+    },
+    onError: () => toast({ title: 'Error', description: 'Failed to remove assignment', variant: 'destructive' }),
+  });
+
+  const handleAssign = () => {
+    if (!selectedClass || !selectedStream || !selectedTeacher) {
+      toast({ title: 'Missing Info', description: 'Please select class, stream, and teacher', variant: 'destructive' });
+      return;
+    }
+    assignMutation.mutate({ class: selectedClass, stream: selectedStream, teacherId: selectedTeacher });
+  };
+
+  const classOptions = ['Form 1', 'Form 2', 'Form 3', 'Form 4'];
+  const streamOptions = ['East', 'West', 'North'];
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Class Teacher Assignments</CardTitle>
+        <CardDescription>Assign teachers to classes for attendance marking and class management</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-6">
+          {/* Assignment Form */}
+          <div className="p-4 border rounded-lg bg-muted/50">
+            <h3 className="font-medium mb-3">Assign New Class Teacher</h3>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <Select value={selectedClass} onValueChange={setSelectedClass}>
+                <SelectTrigger><SelectValue placeholder="Select Class" /></SelectTrigger>
+                <SelectContent>
+                  {classOptions.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={selectedStream} onValueChange={setSelectedStream}>
+                <SelectTrigger><SelectValue placeholder="Select Stream" /></SelectTrigger>
+                <SelectContent>
+                  {streamOptions.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={selectedTeacher} onValueChange={setSelectedTeacher}>
+                <SelectTrigger><SelectValue placeholder="Select Teacher" /></SelectTrigger>
+                <SelectContent>
+                  {teachers?.map((t: any) => (
+                    <SelectItem key={t._id} value={t._id}>
+                      {t.firstName} {t.lastName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button onClick={handleAssign} disabled={assignMutation.isPending}>
+                {assignMutation.isPending ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Plus size={16} className="mr-2" />}
+                Assign
+              </Button>
+            </div>
+          </div>
+
+          {/* Current Assignments */}
+          <div>
+            <h3 className="font-medium mb-3">Current Assignments</h3>
+            {classes && classes.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {classes.map((assignment: any) => (
+                  <div key={assignment._id} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div>
+                      <p className="font-medium">{assignment.class} {assignment.stream}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {assignment.teacher?.firstName} {assignment.teacher?.lastName}
+                      </p>
+                    </div>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      onClick={() => removeMutation.mutate(assignment._id)}
+                      disabled={removeMutation.isPending}
+                    >
+                      <Trash2 size={16} className="text-destructive" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-6">No class teachers assigned yet</p>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Approvers Tab Component
+function ApproversTab() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [subjectId, setSubjectId] = useState('');
+  const [requestType, setRequestType] = useState('all');
+  const [approverId, setApproverId] = useState('');
+  const [bulkMode, setBulkMode] = useState(false);
+  const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
+  const [selectAllStaff, setSelectAllStaff] = useState(false);
+  const [selectAllStudents, setSelectAllStudents] = useState(false);
+
+  const { data: approvers } = useQuery({
+    queryKey: ['approvers'],
+    queryFn: async () => { const res = await api.get('/settings/approvers'); return res.data.data; },
+  });
+
+  const { data: staff } = useQuery({
+    queryKey: ['staff-list'],
+    queryFn: async () => { const res = await api.get('/staff'); return res.data.data; },
+  });
+
+  const { data: students } = useQuery({
+    queryKey: ['students-list'],
+    queryFn: async () => { const res = await api.get('/students?limit=500'); return res.data.data; },
+  });
+
+  const setApproverMutation = useMutation({
+    mutationFn: (data: any) => api.post('/settings/approvers', data),
+    onSuccess: () => {
+      toast({ title: 'Success', description: 'Approver set successfully' });
+      qc.invalidateQueries({ queryKey: ['approvers'] });
+      setSubjectId('');
+      setApproverId('');
+      setSelectedSubjects([]);
+      setSelectAllStaff(false);
+      setSelectAllStudents(false);
+    },
+    onError: () => toast({ title: 'Error', description: 'Failed to set approver', variant: 'destructive' }),
+  });
+
+  const setBulkApproverMutation = useMutation({
+    mutationFn: async (data: any) => {
+      // Create approver settings for each selected subject
+      const promises = data.subjects.map((subject: any) => 
+        api.post('/settings/approvers', {
+          subjectId: subject.id,
+          subjectModel: subject.model,
+          requestType: data.requestType,
+          approverId: data.approverId,
+        })
+      );
+      return Promise.all(promises);
+    },
+    onSuccess: () => {
+      toast({ title: 'Success', description: 'Approvers set for all selected' });
+      qc.invalidateQueries({ queryKey: ['approvers'] });
+      setSelectedSubjects([]);
+      setApproverId('');
+      setSelectAllStaff(false);
+      setSelectAllStudents(false);
+    },
+    onError: () => toast({ title: 'Error', description: 'Failed to set bulk approvers', variant: 'destructive' }),
+  });
+
+  const handleSetApprover = () => {
+    // Strict validation to prevent empty strings
+    if (!subjectId || subjectId.trim() === '' || !approverId || approverId.trim() === '') {
+      toast({ title: 'Error', description: 'Please select both staff/student and approver', variant: 'destructive' });
+      return;
+    }
+
+    const selected = [...(staff || []), ...(students || [])].find((s: any) => s._id === subjectId);
+    const subjectModel = staff?.find((s: any) => s._id === subjectId) ? 'Staff' : 'Student';
+
+    setApproverMutation.mutate({
+      subjectId: subjectId.trim(),
+      subjectModel,
+      requestType,
+      approverId: approverId.trim(),
+    });
+  };
+
+  const handleBulkSetApprover = () => {
+    // Strict validation for approver
+    if (!approverId || approverId.trim() === '') {
+      toast({ title: 'Error', description: 'Please select an approver', variant: 'destructive' });
+      return;
+    }
+
+    const subjects: any[] = [];
+
+    if (selectAllStaff) {
+      staff?.forEach((s: any) => {
+        if (s._id && s._id.trim() !== '') {
+          subjects.push({ id: s._id.trim(), model: 'Staff' });
+        }
+      });
+    } else if (selectAllStudents) {
+      students?.forEach((s: any) => {
+        if (s._id && s._id.trim() !== '') {
+          subjects.push({ id: s._id.trim(), model: 'Student' });
+        }
+      });
+    } else if (selectedSubjects.length > 0) {
+      selectedSubjects.forEach(id => {
+        // Filter out empty strings and null values
+        if (id && id.trim() !== '') {
+          const isStaff = staff?.find((s: any) => s._id === id);
+          subjects.push({ id: id.trim(), model: isStaff ? 'Staff' : 'Student' });
+        }
+      });
+    }
+
+    if (subjects.length === 0) {
+      toast({ title: 'Error', description: 'Please select at least one staff/student', variant: 'destructive' });
+      return;
+    }
+
+    setBulkApproverMutation.mutate({ subjects, requestType, approverId: approverId.trim() });
+  };
+
+  const toggleSubjectSelection = (id: string) => {
+    setSelectedSubjects(prev => 
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAllStaff = () => {
+    setSelectAllStaff(!selectAllStaff);
+    setSelectAllStudents(false);
+    setSelectedSubjects([]);
+  };
+
+  const handleSelectAllStudents = () => {
+    setSelectAllStudents(!selectAllStudents);
+    setSelectAllStaff(false);
+    setSelectedSubjects([]);
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Approver Settings</CardTitle>
+        <CardDescription>Set who approves requests for each staff member or student</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-6">
+          {/* Mode Selector */}
+          <div className="flex gap-2 border-b pb-3">
+            <Button 
+              variant={bulkMode ? "outline" : "default"} 
+              size="sm" 
+              onClick={() => { setBulkMode(false); setSelectedSubjects([]; setSelectAllStaff(false); setSelectAllStudents(false); }}
+            >
+              Single Assignment
+            </Button>
+            <Button 
+              variant={bulkMode ? "default" : "outline"} 
+              size="sm" 
+              onClick={() => { setBulkMode(true); setSubjectId(''); }}
+            >
+              Bulk Assignment
+            </Button>
+          </div>
+
+          {!bulkMode && (
+            /* Single Assignment Form */
+            <div className="border rounded-lg p-4">
+              <h3 className="font-medium mb-4">Assign Approver (Single)</h3>
+              <div className="grid grid-cols-4 gap-3">
+                <Select value={subjectId} onValueChange={setSubjectId}>
+                  <SelectTrigger><SelectValue placeholder="Select Staff/Student" /></SelectTrigger>
+                  <SelectContent>
+                    <div className="px-2 py-1 text-xs font-medium text-muted-foreground">Staff</div>
+                    {staff?.map((s: any) => (
+                      <SelectItem key={s._id} value={s._id}>
+                        {s.firstName} {s.lastName} - {s.staffId}
+                      </SelectItem>
+                    ))}
+                    <div className="px-2 py-1 text-xs font-medium text-muted-foreground border-t mt-2">Students</div>
+                    {students?.slice(0, 100).map((s: any) => (
+                      <SelectItem key={s._id} value={s._id}>
+                        {s.firstName} {s.lastName} - {s.admissionNumber}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={requestType} onValueChange={setRequestType}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Requests</SelectItem>
+                    <SelectItem value="leave">Leave Only</SelectItem>
+                    <SelectItem value="medical">Medical Only</SelectItem>
+                    <SelectItem value="permission">Permission Only</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select value={approverId} onValueChange={setApproverId}>
+                  <SelectTrigger><SelectValue placeholder="Select Approver" /></SelectTrigger>
+                  <SelectContent>
+                    {staff?.filter((s: any) => s.userId).map((s: any) => (
+                      <SelectItem key={s.userId._id} value={s.userId._id}>
+                        {s.firstName} {s.lastName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Button 
+                  onClick={handleSetApprover} 
+                  disabled={setApproverMutation.isPending || !subjectId || subjectId.trim() === '' || !approverId || approverId.trim() === ''}
+                >
+                  {setApproverMutation.isPending ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Plus size={16} className="mr-2" />}
+                  Set
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {bulkMode && (
+            /* Bulk Assignment Form */
+            <div className="border rounded-lg p-4">
+              <h3 className="font-medium mb-4">Assign Approver (Bulk)</h3>
+              
+              {/* Quick Select Options */}
+              <div className="flex gap-4 mb-4 p-3 bg-muted rounded-lg">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    checked={selectAllStaff} 
+                    onChange={handleSelectAllStaff}
+                    className="h-4 w-4"
+                  />
+                  <span className="text-sm font-medium">Select All Staff ({staff?.length || 0})</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    checked={selectAllStudents} 
+                    onChange={handleSelectAllStudents}
+                    className="h-4 w-4"
+                  />
+                  <span className="text-sm font-medium">Select All Students ({students?.length || 0})</span>
+                </label>
+              </div>
+
+              {!selectAllStaff && !selectAllStudents && (
+                /* Individual Selection */
+                <div className="mb-4 max-h-[300px] overflow-y-auto border rounded p-3">
+                  <p className="text-sm font-medium mb-2">Select Individuals:</p>
+                  <div className="space-y-2">
+                    <div className="text-xs text-muted-foreground font-medium mb-1">Staff</div>
+                    {staff?.map((s: any) => (
+                      <label key={s._id} className="flex items-center gap-2 p-2 hover:bg-muted rounded cursor-pointer">
+                        <input 
+                          type="checkbox" 
+                          checked={selectedSubjects.includes(s._id)}
+                          onChange={() => toggleSubjectSelection(s._id)}
+                          className="h-4 w-4"
+                        />
+                        <span className="text-sm">{s.firstName} {s.lastName} - {s.staffId}</span>
+                      </label>
+                    ))}
+                    <div className="text-xs text-muted-foreground font-medium mb-1 mt-3 pt-2 border-t">Students</div>
+                    {students?.slice(0, 50).map((s: any) => (
+                      <label key={s._id} className="flex items-center gap-2 p-2 hover:bg-muted rounded cursor-pointer">
+                        <input 
+                          type="checkbox" 
+                          checked={selectedSubjects.includes(s._id)}
+                          onChange={() => toggleSubjectSelection(s._id)}
+                          className="h-4 w-4"
+                        />
+                        <span className="text-sm">{s.firstName} {s.lastName} - {s.admissionNumber}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Bulk Assignment Controls */}
+              <div className="grid grid-cols-3 gap-3">
+                <Select value={requestType} onValueChange={setRequestType}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Requests</SelectItem>
+                    <SelectItem value="leave">Leave Only</SelectItem>
+                    <SelectItem value="medical">Medical Only</SelectItem>
+                    <SelectItem value="permission">Permission Only</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select value={approverId} onValueChange={setApproverId}>
+                  <SelectTrigger><SelectValue placeholder="Select Approver" /></SelectTrigger>
+                  <SelectContent>
+                    {staff?.filter((s: any) => s.userId).map((s: any) => (
+                      <SelectItem key={s.userId._id} value={s.userId._id}>
+                        {s.firstName} {s.lastName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Button onClick={handleBulkSetApprover} disabled={setBulkApproverMutation.isPending || !approverId}>
+                  {setBulkApproverMutation.isPending ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Plus size={16} className="mr-2" />}
+                  Set for {selectAllStaff ? `All Staff (${staff?.length})` : selectAllStudents ? `All Students (${students?.length})` : `Selected (${selectedSubjects.length})`}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Current Approvers */}
+          <div>
+            <h3 className="font-medium mb-3">Current Approvers</h3>
+            {approvers && approvers.length > 0 ? (
+              <div className="grid grid-cols-1 gap-2">
+                {approvers.map((appr: any) => (
+                  <div key={appr._id} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div className="flex-1">
+                      <p className="font-medium text-sm">{appr.subjectName}</p>
+                      <p className="text-xs text-muted-foreground capitalize">
+                        {appr.requestType} → Approver: {appr.approverName}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-6">No approvers set yet</p>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Roles & Permissions Tab
+function RolesTab({ config, updateField }: any) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Roles & Permissions</CardTitle>
+        <CardDescription>Manage user roles and their permissions</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-3">
+          {config.roleSettings?.map((role: any, idx: number) => (
+            <div key={idx} className="border rounded-lg p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <p className="font-medium">{role.displayName}</p>
+                  <p className="text-xs text-muted-foreground">{role.roleName}</p>
+                </div>
+                <button
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${role.isActive ? 'bg-primary' : 'bg-muted'}`}
+                  onClick={() => {
+                    const updated = [...(config.roleSettings || [])];
+                    updated[idx] = { ...updated[idx], isActive: !updated[idx].isActive };
+                    updateField('roleSettings', updated);
+                  }}>
+                  <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${role.isActive ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {role.permissions.map((perm: string, pidx: number) => (
+                  <span key={pidx} className="text-xs bg-muted px-2 py-0.5 rounded">{perm}</span>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Tab Visibility Tab
+function TabVisibilityTab({ config, updateField }: any) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Tab Visibility</CardTitle>
+        <CardDescription>Control which tabs are visible to which roles</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-3">
+          {config.tabSettings?.map((tab: any, idx: number) => (
+            <div key={idx} className="flex items-center justify-between p-4 border rounded-lg">
+              <div>
+                <p className="font-medium capitalize">{tab.tabName}</p>
+                <p className="text-xs text-muted-foreground">
+                  Visible to: {tab.roles.join(', ')}
+                </p>
+              </div>
+              <button
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${tab.isVisible ? 'bg-primary' : 'bg-muted'}`}
+                onClick={() => {
+                  const updated = [...(config.tabSettings || [])];
+                  updated[idx] = { ...updated[idx], isVisible: !updated[idx].isVisible };
+                  updateField('tabSettings', updated);
+                }}>
+                <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${tab.isVisible ? 'translate-x-6' : 'translate-x-1'}`} />
+              </button>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Announcements Tab
+function AnnouncementsTab() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [showCreate, setShowCreate] = useState(false);
+  const [form, setForm] = useState({ title: '', content: '', audience: ['all'], isPinned: false });
+
+  const { data: announcements, isLoading } = useQuery({
+    queryKey: ['announcements'],
+    queryFn: async () => { const res = await api.get('/announcements'); return res.data.data; },
+  });
+
+  const createMutation = useMutation({
+    mutationFn: () => api.post('/announcements', form),
+    onSuccess: () => {
+      toast({ title: 'Success', description: 'Announcement created' });
+      qc.invalidateQueries({ queryKey: ['announcements'] });
+      setShowCreate(false);
+      setForm({ title: '', content: '', audience: ['all'], isPinned: false });
+    },
+    onError: () => toast({ title: 'Error', description: 'Failed to create announcement', variant: 'destructive' }),
+  });
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle>Announcements</CardTitle>
+            <CardDescription>Create and manage school announcements</CardDescription>
+          </div>
+          <Button size="sm" onClick={() => setShowCreate(true)}>
+            <Plus size={16} className="mr-2" /> New Announcement
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="flex justify-center py-8"><Loader2 className="animate-spin" /></div>
+        ) : (
+          <div className="space-y-3">
+            {announcements && announcements.length > 0 ? (
+              announcements.map((ann: any) => (
+                <div key={ann._id} className="border rounded-lg p-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <p className="font-medium">{ann.title}</p>
+                        {ann.isPinned && <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded">Pinned</span>}
+                      </div>
+                      <p className="text-sm text-muted-foreground">{ann.content}</p>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        {new Date(ann.createdAt).toLocaleDateString()} • Audience: {ann.audience.join(', ')}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-6">No announcements yet</p>
+            )}
+          </div>
+        )}
+
+        {/* Create Dialog */}
+        {showCreate && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowCreate(false)}>
+            <div className="bg-background p-6 rounded-lg max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+              <h3 className="font-bold text-lg mb-4">New Announcement</h3>
+              <div className="space-y-3">
+                <div>
+                  <Label>Title</Label>
+                  <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+                </div>
+                <div>
+                  <Label>Content</Label>
+                  <Textarea rows={4} value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} />
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={form.isPinned}
+                    onChange={(e) => setForm({ ...form, isPinned: e.target.checked })}
+                    className="rounded"
+                  />
+                  <Label>Pin this announcement</Label>
+                </div>
+              </div>
+              <div className="flex gap-2 mt-4">
+                <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
+                <Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending}>
+                  {createMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Create
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

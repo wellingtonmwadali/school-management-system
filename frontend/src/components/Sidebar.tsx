@@ -72,8 +72,8 @@ const navItems: NavItem[] = [
     roles: ['principal', 'medical_officer'],
   },
   {
-    label: 'Leave', href: '/leave', icon: <Calendar size={18} />,
-    roles: ['principal', 'deputy_principal', 'hod', 'class_teacher', 'subject_teacher', 'counselor', 'finance_officer'],
+    label: 'Requests', href: '/requests', icon: <ClipboardList size={18} />,
+    roles: ['principal', 'deputy_principal', 'hod', 'class_teacher', 'subject_teacher', 'counselor', 'finance_officer', 'medical_officer'],
   },
   {
     label: 'Communications', href: '/communications', icon: <MessageSquare size={18} />,
@@ -175,13 +175,15 @@ export function Sidebar() {
       {/* User */}
       <div className="border-t border-sidebar-border p-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sidebar-accent text-sidebar-accent-foreground text-sm font-semibold">
-            {user ? getInitials(user.firstName, user.lastName) : 'U'}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">{user?.firstName} {user?.lastName}</p>
-            <p className="text-xs text-sidebar-foreground/60 truncate">{user ? getRoleLabel(user.role) : ''}</p>
-          </div>
+          <Link href="/profile" className="flex items-center gap-3 flex-1 min-w-0 hover:opacity-80 transition-opacity">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sidebar-accent text-sidebar-accent-foreground text-sm font-semibold">
+              {user ? getInitials(user.firstName, user.lastName) : 'U'}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium truncate">{user?.firstName} {user?.lastName}</p>
+              <p className="text-xs text-sidebar-foreground/60 truncate">{user ? getRoleLabel(user.role) : ''}</p>
+            </div>
+          </Link>
           <button onClick={logout} className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors" title="Logout">
             <LogOut size={16} />
           </button>

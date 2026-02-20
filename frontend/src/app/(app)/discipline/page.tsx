@@ -18,6 +18,8 @@ export default function DisciplinePage() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
+  const [selectedIncident, setSelectedIncident] = useState<any>(null);
   const [filterStatus, setFilterStatus] = useState('');
   const [filterSeverity, setFilterSeverity] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
@@ -69,6 +71,22 @@ export default function DisciplinePage() {
     },
     onError: () => toast({ title: 'Error', description: 'Failed to log incident', variant: 'destructive' }),
   });
+
+  const updateMutation = useMutation({
+    mutationFn: (data: { status: string; resolution?: string }) => api.put(`/discipline/${selectedIncident?._id}`, data),
+    onSuccess: () => {
+      toast({ title: 'Incident Updated', description: 'Incident status updated successfully' });
+      qc.invalidateQueries({ queryKey: ['incidents'] });
+      setShowEdit(false);
+      setSelectedIncident(null);
+    },
+    onError: () => toast({ title: 'Error', description: 'Failed to update incident', variant: 'destructive' }),
+  });
+
+  const handleEdit = (incident: any) => {
+    setSelectedIncident(incident);
+    setShowEdit(true);
+  };
 
   const incidents = data || [];
   const openCount = incidents.filter((i: { status: string }) => i.status === 'open').length;
@@ -236,7 +254,7 @@ export default function DisciplinePage() {
                   studentId: { firstName: string; lastName: string; currentStream: string } | null;
                   category: string; severity: string; date: string; status: string; parentNotified: boolean;
                 }) => (
-                  <TableRow key={incident._id}>
+                  <TableRow key={incident._id} className="cursor-pointer hover:bg-muted/50" onClick={() => handleEdit(incident)}>
                     <TableCell>
                       <p className="font-medium text-sm">{incident.studentId ? `${incident.studentId.firstName} ${incident.studentId.lastName}` : '—'}</p>
                       <p className="text-xs text-muted-foreground">{incident.studentId?.currentStream}</p>
@@ -325,6 +343,74 @@ export default function DisciplinePage() {
             <Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
             <Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !form.studentId || !form.description}>
               {createMutation.isPending ? 'Saving...' : 'Log Incident'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Incident Dialog */}
+      <Dialog open={showEdit} onOpenChange={setShowEdit}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>Update Incident Status</DialogTitle></DialogHeader>
+          {selectedIncident && (
+            <div className="space-y-4">
+              <div className="border rounded-lg p-4 bg-muted/50">
+                <p className="text-sm font-medium mb-2">
+                  {selectedIncident.studentId ? `${selectedIncident.studentId.firstName} ${selectedIncident.studentId.lastName}` : 'Unknown Student'}
+                </p>
+                <p className="text-xs text-muted-foreground mb-1">{selectedIncident.category}</p>
+                <p className="text-xs text-muted-foreground">{formatDate(selectedIncident.date)}</p>
+                <p className="text-sm mt-2">{selectedIncident.description}</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Status *</Label>
+                <Select 
+                  defaultValue={selectedIncident.status} 
+                  onValueChange={v => setSelectedIncident({ ...selectedIncident, status: v })}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="open">Open</SelectItem>
+                    <SelectItem value="under_investigation">Under Investigation</SelectItem>
+                    <SelectItem value="resolved">Resolved</SelectItem>
+                    <SelectItem value="closed">Closed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Resolution Notes</Label>
+                <Textarea 
+                  defaultValue={selectedIncident.resolution || ''} 
+                  onChange={e => setSelectedIncident({ ...selectedIncident, resolution: e.target.value })}
+                  placeholder="Enter resolution details..." 
+                  rows={3} 
+                />
+              </div>
+
+              <div className="space-y-2 flex items-center gap-2">
+                <input 
+                  type="checkbox" 
+                  checked={selectedIncident.parentNotified}
+                  onChange={e => setSelectedIncident({ ...selectedIncident, parentNotified: e.target.checked })}
+                  className="h-4 w-4"
+                />
+                <Label className="mb-0">Parent Notified</Label>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEdit(false)}>Cancel</Button>
+            <Button 
+              onClick={() => updateMutation.mutate({ 
+                status: selectedIncident?.status, 
+                resolution: selectedIncident?.resolution,
+                parentNotified: selectedIncident?.parentNotified 
+              })} 
+              disabled={updateMutation.isPending}
+            >
+              {updateMutation.isPending ? 'Updating...' : 'Update Incident'}
             </Button>
           </DialogFooter>
         </DialogContent>
