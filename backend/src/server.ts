@@ -89,43 +89,98 @@ app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 
-const start = async () => {
-  try {
-    // Connect to database
-    await connectDB();
-    logger.info('Database connected successfully');
-    
-    // Start server
-    const server = app.listen(PORT, () => {
-      logger.info(`🚀 Server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
-      logger.info(`📊 Health check: http://localhost:${PORT}/health`);
-      logger.info(`🔍 Metrics: http://localhost:${PORT}/metrics`);
-    });
-    
-    // Graceful shutdown
-    const gracefulShutdown = (signal: string) => {
-      logger.info(`${signal} signal received: closing HTTP server`);
-      server.close(() => {
-        logger.info('HTTP server closed');
-        process.exit(0);
-      });
-      
-      // Force shutdown after 30 seconds
-      setTimeout(() => {
-        logger.error('Forced shutdown after timeout');
+// Database connection state
+let dbInitialized = false;
+let dbInitPromise: Promise<void> | null = null;
+
+// Initialize database connection
+const initDatabase = async () => {
+  if (dbInitialized) return;
+  
+  // If initialization is in progress, wait for it
+  if (dbInitPromise) return dbInitPromise;
+  
+  dbInitPromise = (async () => {
+    try {
+      await connectDB();
+      logger.info('Database connected successfully');
+      dbInitialized = true;
+    } catch (error) {
+      logger.error('Database connection failed:', error);
+      dbInitPromise = null; // Reset so it can be retried
+      // Don't exit in serverless environments
+      if (process.env.VERCEL !== '1') {
         process.exit(1);
-      }, 30000);
-    };
-    
-    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
-    
-  } catch (error) {
-    logger.error('Failed to start server:', error);
-    process.exit(1);
-  }
+      }
+      throw error;
+    }
+  })();
+  
+  return dbInitPromise;
 };
 
-start();
+// For non-serverless environments, connect immediately
+if (process.env.VERCEL !== '1') {
+  initDatabase().catch(err => {
+    logger.error('Failed to initialize database:', err);
+    process.exit(1);
+  });
+}
 
+// Middleware to ensure DB is connected in serverless
+if (process.env.VERCEL === '1') {
+  app.use(async (req, res, next) => {
+    try {
+      await initDatabase();
+      next();
+    } catch (error) {
+      logger.error('Database initialization failed in request:', error);
+      res.status(503).json({ 
+        error: 'Service temporarily unavailable',
+        message: 'Database connection failed',
+        details: process.env.NODE_ENV === 'development' ? String(error) : undefined
+      });
+    }
+  });
+}
+
+// Only start server if not in Vercel serverless environment
+if (process.env.VERCEL !== '1') {
+  const start = async () => {
+    try {
+      // Start server
+      const server = app.listen(PORT, () => {
+        logger.info(`🚀 Server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
+        logger.info(`📊 Health check: http://localhost:${PORT}/health`);
+        logger.info(`🔍 Metrics: http://localhost:${PORT}/metrics`);
+      });
+      
+      // Graceful shutdown
+      const gracefulShutdown = (signal: string) => {
+        logger.info(`${signal} signal received: closing HTTP server`);
+        server.close(() => {
+          logger.info('HTTP server closed');
+          process.exit(0);
+        });
+        
+        // Force shutdown after 30 seconds
+        setTimeout(() => {
+          logger.error('Forced shutdown after timeout');
+          process.exit(1);
+        }, 30000);
+      };
+      
+      process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+      process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+      
+    } catch (error) {
+      logger.error('Failed to start server:', error);
+      process.exit(1);
+    }
+  };
+
+  start();
+}
+
+// Export app for serverless environments (Vercel)
 export default app;

@@ -1,0 +1,45 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "dist/server.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/health",
+      "dest": "dist/server.js"
+    },
+    {
+      "src": "/ready",
+      "dest": "dist/server.js"
+    },
+    {
+      "src": "/alive",
+      "dest": "dist/server.js"
+    },
+    {
+      "src": "/metrics",
+      "dest": "dist/server.js"
+    },
+    {
+      "src": "/api/v1/(.*)",
+      "dest": "dist/server.js"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "dist/server.js"
+    }
+  ],
+  "env": {
+    "NODE_ENV": "production",
+    "VERCEL": "1"
+  },
+  "functions": {
+    "dist/server.js": {
+      "maxDuration": 60,
+      "memory": 1024
+    }
+  }
+}
