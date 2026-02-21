@@ -9,6 +9,9 @@ The backend has been configured to run as a serverless function on Vercel with o
 3. **Improved Error Handling**: Better error messages for database connection failures
 4. **Optimized Settings**: Reduced pool size and timeouts for serverless environment
 5. **Increased Function Timeout**: Set to 60 seconds with 1024MB memory
+6. **Fixed Winston Logger**: Disabled file-based logging in serverless (uses console only)
+   - Vercel has read-only filesystem except `/tmp`
+   - File logging only works in traditional server deployments
 
 ## Required Environment Variables
 
@@ -73,7 +76,15 @@ vercel --prod
 
 ## Troubleshooting Common Issues
 
-### 1. FUNCTION_INVOCATION_FAILED Error
+### 1. ENOENT: no such file or directory, mkdir 'logs'
+**Cause**: Winston trying to create log files in read-only filesystem
+
+**Solution**:
+- Already fixed! Winston now uses Console logging in serverless
+- File logging only happens in traditional server environments
+- If you see this error, make sure you've pulled latest changes
+
+### 2. FUNCTION_INVOCATION_FAILED Error
 **Cause**: Missing environment variables or database connection failure
 
 **Solution**:
@@ -81,7 +92,7 @@ vercel --prod
 - Check MongoDB Atlas allows connections from anywhere (IP: 0.0.0.0/0)
 - Check Vercel function logs: `vercel logs [deployment-url]`
 
-### 2. Database Connection Timeout
+### 3. Database Connection Timeout
 **Cause**: MongoDB Atlas network restrictions or slow connection
 
 **Solution**:
@@ -89,7 +100,7 @@ vercel --prod
 - Add IP Address: `0.0.0.0/0` (allow from anywhere)
 - Or use Vercel's IP ranges (check Vercel docs)
 
-### 3. 504 Gateway Timeout
+### 4. 504 Gateway Timeout
 **Cause**: Function execution exceeds timeout
 
 **Solution**:
@@ -97,7 +108,7 @@ vercel --prod
 - If still timing out, optimize database queries
 - Consider using MongoDB indexes
 
-### 4. Module Not Found Errors
+### 5. Module Not Found Errors
 **Cause**: Dependencies not installed or build failed
 
 **Solution**:
