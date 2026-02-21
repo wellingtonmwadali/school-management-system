@@ -11,6 +11,8 @@ export interface User {
   email: string;
   role: UserRole;
   schoolId: string;
+  profileId?: string;
+  profileModel?: string;
   avatar?: string;
 }
 
@@ -22,16 +24,41 @@ export interface Student {
   middleName?: string;
   dateOfBirth: string;
   gender: 'male' | 'female' | 'other';
+  nationality?: string;
+  religion?: string;
+  bloodGroup?: string;
+  hasDisability?: boolean;
+  disabilityDetails?: string;
+  idNumber?: string;
+  nemisNumber?: string;
+  kcpeIndexNumber?: string;
+  kcpeScore?: number;
   currentClass: string;
   currentStream: string;
   status: 'active' | 'suspended' | 'expelled' | 'transferred' | 'graduated' | 'dropout';
   photo?: string;
   admissionDate: string;
-  father?: { name: string; phone: string; email?: string };
-  mother?: { name: string; phone: string; email?: string };
+  yearOfJoining?: number;
+  previousSchool?: string;
+  house?: string;
+  father?: { name: string; phone: string; email?: string; idNumber?: string; occupation?: string; employer?: string };
+  mother?: { name: string; phone: string; email?: string; idNumber?: string; occupation?: string; employer?: string };
+  guardian?: { name: string; relationship: string; phone: string; email?: string; idNumber?: string };
+  primaryContactType?: 'father' | 'mother' | 'guardian';
+  emergencyContacts?: { name: string; relationship: string; phone: string }[];
   residentialAddress: string;
+  postalAddress?: string;
   isBoarding: boolean;
+  dormitory?: string;
+  roomNumber?: string;
+  bedNumber?: string;
   usesTransport: boolean;
+  transportRoute?: string;
+  pickupPoint?: string;
+  medicalConditions?: string[];
+  allergies?: string[];
+  medications?: string[];
+  medicalInsurance?: string;
   createdAt: string;
 }
 
@@ -147,6 +174,7 @@ export interface SchoolConfig {
   address: string;
   phone: string;
   email: string;
+  website?: string;
   type: 'day' | 'boarding' | 'mixed';
   curriculum: string;
   classLevels: string[];

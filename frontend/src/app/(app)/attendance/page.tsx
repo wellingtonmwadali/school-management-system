@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/badge';
 import { getStatusColor, formatDate } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import { Check, X, Clock, UserCheck, Save, AlertCircle, Users } from 'lucide-react';
+import { Check, X, Clock, UserCheck, Save, AlertCircle, Users, BarChart as BarChartIcon } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 const CLASS_OPTIONS = ['Form 1', 'Form 2', 'Form 3', 'Form 4'];
@@ -133,7 +133,7 @@ export default function AttendancePage() {
           )}
           {isAdmin && (
             <TabsTrigger value="trends" className="gap-2">
-              <BarChart size={16} />
+              <BarChartIcon size={16} />
               Trends & Reports
             </TabsTrigger>
           )}

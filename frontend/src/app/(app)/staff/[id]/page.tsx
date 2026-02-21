@@ -16,8 +16,7 @@ import {
   BookOpen,
   Edit,
   Calendar,
-  Briefcase,
-  IdCard
+  Briefcase
 } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import Link from 'next/link';
@@ -103,7 +102,7 @@ export default function StaffDetailPage() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <IdCard className="h-8 w-8 text-blue-500" />
+              <Briefcase className="h-8 w-8 text-blue-500" />
               <div>
                 <p className="text-sm text-muted-foreground">Department</p>
                 <p className="font-semibold">{staff.department || 'N/A'}</p>

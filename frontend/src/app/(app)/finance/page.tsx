@@ -200,16 +200,6 @@ export default function FinancePage() {
 
         {/* INVOICES TAB */}
         <TabsContent value="invoices" className="space-y-6">
-
-      <Tabs defaultValue="dashboard" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-          <TabsTrigger value="invoices">Invoices</TabsTrigger>
-          <TabsTrigger value="analytics">Analytics</TabsTrigger>
-        </TabsList>
-
-        {/* DASHBOARD TAB */}
-        <TabsContent value="dashboard" className="space-y-6">
           {/* Filters */}
           <Card>
             <CardContent className="p-4">
@@ -300,41 +290,17 @@ export default function FinancePage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="analytics" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Collection Rate by Class</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={240}>
-                  <BarChart data={byClass}>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                    <XAxis dataKey="class" tick={{ fontSize: 12 }} />
-                    <YAxis tick={{ fontSize: 12 }} unit="%" domain={[0, 100]} />
-                    <Tooltip formatter={(v: number) => [`${v.toFixed(1)}%`, 'Rate']} />
-                    <Bar dataKey="rate" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Monthly Collection Trend</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={240}>
-                  <LineChart data={monthlyTrend.map((m: { _id: string; amount: number }) => ({ month: m._id, amount: m.amount }))}>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                    <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                    <YAxis tick={{ fontSize: 12 }} />
-                    <Tooltip formatter={(v: number) => [formatCurrency(v), 'Collected']} />
-                    <Line type="monotone" dataKey="amount" stroke="#10b981" strokeWidth={2} dot={{ r: 4 }} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </div>
+        {/* PAYMENTS TAB */}
+        <TabsContent value="payments" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Payment History</CardTitle>
+              <CardDescription>View all recorded payments</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">Payment history feature coming soon...</p>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 

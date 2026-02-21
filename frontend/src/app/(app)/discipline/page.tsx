@@ -73,7 +73,7 @@ export default function DisciplinePage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: (data: { status: string; resolution?: string }) => api.put(`/discipline/${selectedIncident?._id}`, data),
+    mutationFn: (data: { status: string; resolution?: string; parentNotified?: boolean }) => api.put(`/discipline/${selectedIncident?._id}`, data),
     onSuccess: () => {
       toast({ title: 'Incident Updated', description: 'Incident status updated successfully' });
       qc.invalidateQueries({ queryKey: ['incidents'] });

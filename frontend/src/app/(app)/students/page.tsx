@@ -113,7 +113,7 @@ export default function StudentsPage() {
       residentialAddress: student.residentialAddress || '',
       postalAddress: student.postalAddress || '',
       admissionDate: student.admissionDate.split('T')[0],
-      yearOfJoining: student.yearOfJoining,
+      yearOfJoining: student.yearOfJoining || new Date().getFullYear(),
       previousSchool: student.previousSchool || '',
       house: student.house || '',
       status: student.status,
@@ -121,9 +121,9 @@ export default function StudentsPage() {
       allergies: student.allergies || [],
       medications: student.medications || [],
       medicalInsurance: student.medicalInsurance || '',
-      father: student.father || { name: '', idNumber: '', phone: '', email: '', occupation: '', employer: '' },
-      mother: student.mother || { name: '', idNumber: '', phone: '', email: '', occupation: '', employer: '' },
-      guardian: student.guardian || { name: '', relationship: '', phone: '', email: '', idNumber: '' },
+      father: student.father ? { ...student.father, idNumber: student.father.idNumber || '', email: student.father.email || '', occupation: student.father.occupation || '', employer: student.father.employer || '' } : { name: '', idNumber: '', phone: '', email: '', occupation: '', employer: '' },
+      mother: student.mother ? { ...student.mother, idNumber: student.mother.idNumber || '', email: student.mother.email || '', occupation: student.mother.occupation || '', employer: student.mother.employer || '' } : { name: '', idNumber: '', phone: '', email: '', occupation: '', employer: '' },
+      guardian: student.guardian ? { ...student.guardian, email: student.guardian.email || '', idNumber: student.guardian.idNumber || '' } : { name: '', relationship: '', phone: '', email: '', idNumber: '' },
       primaryContactType: student.primaryContactType || 'father',
       emergencyContacts: student.emergencyContacts || [{ name: '', relationship: '', phone: '' }],
       isBoarding: student.isBoarding || false,
@@ -147,7 +147,6 @@ export default function StudentsPage() {
       if (filterStatus) params.set('status', filterStatus);
       
       const res = await api.get(`/students?${params}&limit=10000`, { responseType: 'blob' });
-       onClick={handleExport}
       // Convert students data to CSV
       const csvData = students.map(s => ({
         'Admission No': s.admissionNumber,
