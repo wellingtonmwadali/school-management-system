@@ -1,17 +1,24 @@
 import { Request, Response, NextFunction } from 'express';
 import winston from 'winston';
 
-// Configure Winston logger
-export const logger = winston.createLogger({
-  level: process.env.LOG_LEVEL || 'info',
-  format: winston.format.combine(
-    winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-    winston.format.errors({ stack: true }),
-    winston.format.splat(),
-    winston.format.json()
-  ),
-  defaultMeta: { service: 'school-erp' },
-  transports: [
+// Configure Winston logger based on environment
+const transports: winston.transport[] = [];
+
+// In serverless environments (Vercel), only use Console transport
+// Vercel has read-only filesystem except /tmp
+if (process.env.VERCEL === '1') {
+  // Serverless: Console only
+  transports.push(
+    new winston.transports.Console({
+      format: winston.format.combine(
+        winston.format.colorize(),
+        winston.format.simple()
+      ),
+    })
+  );
+} else {
+  // Traditional server: Use file logging
+  transports.push(
     // Write all logs with level 'error' and below to error.log
     new winston.transports.File({ 
       filename: 'logs/error.log', 
@@ -24,19 +31,33 @@ export const logger = winston.createLogger({
       filename: 'logs/combined.log',
       maxsize: 5242880, // 5MB
       maxFiles: 5,
-    }),
-  ],
-});
-
-// For non-production environments, also log to console
-if (process.env.NODE_ENV !== 'production') {
-  logger.add(new winston.transports.Console({
-    format: winston.format.combine(
-      winston.format.colorize(),
-      winston.format.simple()
-    ),
-  }));
+    })
+  );
+  
+  // Also console in non-production
+  if (process.env.NODE_ENV !== 'production') {
+    transports.push(
+      new winston.transports.Console({
+        format: winston.format.combine(
+          winston.format.colorize(),
+          winston.format.simple()
+        ),
+      })
+    );
+  }
 }
+
+export const logger = winston.createLogger({
+  level: process.env.LOG_LEVEL || 'info',
+  format: winston.format.combine(
+    winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+    winston.format.errors({ stack: true }),
+    winston.format.splat(),
+    winston.format.json()
+  ),
+  defaultMeta: { service: 'school-erp' },
+  transports,
+});
 
 // Custom error class
 export class AppError extends Error {
