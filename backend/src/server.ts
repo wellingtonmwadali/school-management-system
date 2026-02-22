@@ -87,7 +87,7 @@ app.use(notFound);
 // Global error handler
 app.use(errorHandler);
 
-const PORT = process.env.PORT || 5000;
+const PORT = Number(process.env.PORT) || 5000;
 
 // Database connection state
 let dbInitialized = false;
@@ -148,9 +148,13 @@ if (process.env.VERCEL === '1') {
 if (process.env.VERCEL !== '1') {
   const start = async () => {
     try {
+      // Bind to 0.0.0.0 for Docker/Cloud platforms (Render, Railway, etc.)
+      // This allows external connections, not just localhost
+      const HOST = process.env.HOST || '0.0.0.0';
+      
       // Start server
-      const server = app.listen(PORT, () => {
-        logger.info(`🚀 Server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
+      const server = app.listen(PORT, HOST, () => {
+        logger.info(`🚀 Server running on ${HOST}:${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
         logger.info(`📊 Health check: http://localhost:${PORT}/health`);
         logger.info(`🔍 Metrics: http://localhost:${PORT}/metrics`);
       });
