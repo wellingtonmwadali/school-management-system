@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: school-management-system-backend
+    runtime: docker
+    repo: https://github.com/wellingtonmwadali/school-management-system
+    rootDir: backend
+    dockerfilePath: backend/Dockerfile
+    dockerContext: backend
+    region: oregon # or your preferred region
+    plan: free # or starter, etc.
+    branch: main
+    
+    # Health check configuration
+    healthCheckPath: /alive
+    
+    # Environment variables (set these in Render Dashboard - these are just references)
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        generateValue: true # Render auto-generates
+      - key: MONGODB_URI
+        sync: false # Set manually in dashboard
+      - key: JWT_SECRET
+        sync: false # Set manually in dashboard
+      - key: FRONTEND_URL
+        sync: false # Set manually in dashboard
+      - key: ALLOWED_ORIGINS
+        sync: false # Set manually in dashboard
+    
+    # Auto-deploy on push to main
+    autoDeploy: true

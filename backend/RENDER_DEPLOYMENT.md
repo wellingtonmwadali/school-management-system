@@ -1,5 +1,22 @@
 # Render Deployment Guide
 
+## Two Deployment Options
+
+### Option 1: Using render.yaml (Recommended)
+A `render.yaml` file exists in the project root with infrastructure-as-code configuration.
+
+1. Go to Render Dashboard → **Blueprints**
+2. Click **New Blueprint Instance**
+3. Connect your GitHub repository
+4. Render will detect `render.yaml` and show the configuration
+5. Review and click **Apply**
+6. **Still required**: Manually add environment variables (see below)
+
+### Option 2: Manual Service Creation
+Follow the steps in this guide to create the service manually.
+
+---
+
 ## Current Issue: 502 Bad Gateway
 
 Your backend builds successfully but crashes at runtime. This is **almost certainly** because environment variables are not set in Render.
@@ -18,10 +35,10 @@ Your backend builds successfully but crashes at runtime. This is **almost certai
 |-----|-------|-------|
 | `MONGODB_URI` | `mongodb+srv://administrator:Admin%40123@cluster0.jx3bb3x.mongodb.net/school-erp` | **CRITICAL** - From your [.env](../.env) file |
 | `JWT_SECRET` | `your-super-secret-jwt-key-change-in-production` | **CRITICAL** - Generate a strong one |
-| `NODE_ENV` | `production` | Required |
-| `PORT` | `5000` | Render auto-provides this, but you can set it |
+| `NODE_ENV` | `production` | **CRITICAL** - Server runs in development mode without this |
 | `FRONTEND_URL` | `https://your-frontend.vercel.app` | Your deployed frontend URL |
 | `ALLOWED_ORIGINS` | `https://your-frontend.vercel.app` | Same as FRONTEND_URL |
+| `PORT` | (leave blank) | Render auto-assigns this (usually 10000) |
 
 3. Click **Save Changes**
 
@@ -133,7 +150,9 @@ Render automatically monitors your app:
 
 1. In Render Dashboard → **Settings**  
 2. Under **Health & Alerts**
-3. Set **Health Check Path**: `/health`
+3. Set **Health Check Path**: `/alive` (not `/health`)
+   - `/alive` returns 200 OK immediately (for port detection)
+   - `/health` checks database and returns full health status
 4. Render will ping this every 30s to ensure app is running
 
 ### Scaling
