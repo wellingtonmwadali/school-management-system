@@ -13,7 +13,7 @@ export const api = axios.create({
 
 api.interceptors.request.use((config) => {
   console.log(`📤 ${config.method?.toUpperCase()} ${config.url}`);
-  console.log('  Full URL:', config.baseURL + config.url);
+  console.log('  Full URL:', `${config.baseURL || ''}${config.url || ''}`);
   
   if (typeof window !== 'undefined') {
     const token = localStorage.getItem('token');
