@@ -120,10 +120,13 @@ const initDatabase = async () => {
 };
 
 // For non-serverless environments, connect immediately
+// But don't crash if it fails - let health checks report status
 if (process.env.VERCEL !== '1') {
   initDatabase().catch(err => {
-    logger.error('Failed to initialize database:', err);
-    process.exit(1);
+    logger.error('Failed to initialize database on startup:', err);
+    logger.warn('Server will continue running - retrying DB connection on next request');
+    // Don't exit - allow server to start and serve health checks
+    // Health endpoint will report database status
   });
 }
 
