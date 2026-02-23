@@ -32,12 +32,33 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   login: async (email: string, password: string) => {
+    console.log('🔄 Auth store: Starting login process');
+    console.log('📍 API URL:', process.env.NEXT_PUBLIC_API_URL || 'Not set');
+    
     set({ isLoading: true });
-    const res = await api.post('/auth/login', { email, password });
-    const { token, user } = res.data;
-    localStorage.setItem('token', token);
-    localStorage.setItem('user', JSON.stringify(user));
-    set({ token, user, isLoading: false });
+    
+    try {
+      console.log('📤 Sending login request to /auth/login');
+      const res = await api.post('/auth/login', { email, password });
+      
+      console.log('📥 Login response received:', res.status);
+      console.log('📦 Response data:', res.data);
+      
+      const { token, user } = res.data;
+      
+      console.log('💾 Saving to localStorage...');
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(user));
+      
+      console.log('✨ Auth store updated successfully');
+      console.log('👤 User:', user.name, '| Role:', user.role);
+      
+      set({ token, user, isLoading: false });
+    } catch (error) {
+      console.error('🚨 Login error in auth store:', error);
+      set({ isLoading: false });
+      throw error;
+    }
   },
 
   logout: () => {
