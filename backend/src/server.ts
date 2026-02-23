@@ -81,6 +81,14 @@ app.get('/metrics', metrics);
 // API Routes
 app.use('/api/v1', routes);
 
+// Root route
+app.get('/', (req, res) => {
+  res.status(200).json({
+    status: 'success',
+    message: 'School ERP Backend Running'
+  });
+});
+
 // 404 Handler
 app.use(notFound);
 
