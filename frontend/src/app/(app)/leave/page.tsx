@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
+import { useAuthStore } from '@/store/auth';
 import { Button } from '@/components/ui/button';
 import { Input, Label, Textarea } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,6 +19,7 @@ const LEAVE_TYPES = ['Annual', 'Sick', 'Maternity', 'Paternity', 'Compassionate'
 export default function LeavePage() {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const user = useAuthStore((state) => state.user);
   const [showApply, setShowApply] = useState(false);
   const [form, setForm] = useState({ leaveType: 'Annual', startDate: '', endDate: '', reason: '', totalDays: 1 });
 
@@ -41,13 +43,33 @@ export default function LeavePage() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['leaves'],
-    queryFn: async () => { const res = await api.get('/leave'); return res.data.data; },
+    queryFn: async () => { 
+      const res = await api.get('/requests?type=leave'); 
+      return res.data.data; 
+    },
   });
 
   const applyMutation = useMutation({
-    mutationFn: () => api.post('/leave', form),
-    onSuccess: () => {
+    mutationFn: () => api.post('/requests', {
+      requestType: 'leave',
+      leaveType: form.leaveType,
+      startDate: form.startDate,
+      endDate: form.endDate,
+      description: form.reason,
+      title: `${form.leaveType} Leave Request`,
+    }),
+    onSuccess: (response) => {
       toast({ title: 'Leave Applied', description: 'Your leave request has been submitted' });
+      // Show warning if default approver was used
+      if (response.data.warning) {
+        setTimeout(() => {
+          toast({ 
+            title: 'Notice', 
+            description: response.data.warning,
+            variant: 'default',
+          });
+        }, 500);
+      }
       qc.invalidateQueries({ queryKey: ['leaves'] });
       qc.invalidateQueries({ queryKey: ['leave-balance'] });
       setShowApply(false);
@@ -59,7 +81,7 @@ export default function LeavePage() {
   });
 
   const reviewMutation = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: string }) => api.put(`/leave/${id}/review`, { status }),
+    mutationFn: ({ id, status }: { id: string; status: string }) => api.put(`/requests/${id}/review`, { status }),
     onSuccess: () => {
       toast({ title: 'Leave Reviewed', description: 'Leave request updated' });
       qc.invalidateQueries({ queryKey: ['leaves'] });
@@ -143,18 +165,6 @@ export default function LeavePage() {
         </Card>
       )}
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Leave Management</h1>
-          <p className="text-muted-foreground text-sm">Staff leave requests and approvals</p>
-        </div>
-        <Button size="sm" onClick={() => setShowApply(true)}>
-          <Plus size={16} className="mr-2" /> Apply for Leave
-        </Button>
-      </div>
-
       <Card>
         <CardContent className="p-0">
           {isLoading ? <div className="p-8 text-center"><Loader2 className="animate-spin mx-auto" /></div> : (
@@ -174,14 +184,19 @@ export default function LeavePage() {
               <TableBody>
                 {leaves.map((leave: {
                   _id: string;
-                  staffId: { firstName: string; lastName: string; designation: string } | null;
-                  leaveType: string; startDate: string; endDate: string; totalDays: number;
-                  status: string; createdAt: string;
+                  subjectName: string;
+                  leaveType: string;
+                  startDate: string;
+                  endDate: string;
+                  totalDays: number;
+                  status: string;
+                  createdAt: string;
+                  approverId: string;
+                  requestedBy: string;
                 }) => (
                   <TableRow key={leave._id}>
                     <TableCell>
-                      <p className="font-medium text-sm">{leave.staffId ? `${leave.staffId.firstName} ${leave.staffId.lastName}` : '—'}</p>
-                      <p className="text-xs text-muted-foreground">{leave.staffId?.designation}</p>
+                      <p className="font-medium text-sm">{leave.subjectName}</p>
                     </TableCell>
                     <TableCell className="text-sm">{leave.leaveType}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">{formatDate(leave.startDate)}</TableCell>
@@ -196,23 +211,31 @@ export default function LeavePage() {
                     <TableCell>
                       {leave.status === 'pending' && (
                         <div className="flex gap-1">
-                          <Button size="sm" variant="outline" className="h-7 text-xs text-green-700 border-green-300 hover:bg-green-50"
-                            onClick={() => reviewMutation.mutate({ id: leave._id, status: 'approved' })}>Approve</Button>
-                          <Button size="sm" variant="outline" className="h-7 text-xs text-red-700 border-red-300 hover:bg-red-50"
-                            onClick={() => reviewMutation.mutate({ id: leave._id, status: 'rejected' })}>Reject</Button>
-                          <Button 
-                            size="sm" 
-                            variant="outline" 
-                            className="h-7 text-xs text-orange-700 border-orange-300 hover:bg-orange-50"
-                            onClick={() => {
-                              if (confirm('Are you sure you want to withdraw this request?')) {
-                                withdrawMutation.mutate(leave._id);
-                              }
-                            }}
-                          >
-                            <XCircle size={14} className="mr-1" />
-                            Withdraw
-                          </Button>
+                          {/* Approve/Reject buttons - only for approver */}
+                          {leave.approverId === user?.id && (
+                            <>
+                              <Button size="sm" variant="outline" className="h-7 text-xs text-green-700 border-green-300 hover:bg-green-50"
+                                onClick={() => reviewMutation.mutate({ id: leave._id, status: 'approved' })}>Approve</Button>
+                              <Button size="sm" variant="outline" className="h-7 text-xs text-red-700 border-red-300 hover:bg-red-50"
+                                onClick={() => reviewMutation.mutate({ id: leave._id, status: 'rejected' })}>Reject</Button>
+                            </>
+                          )}
+                          {/* Withdraw button - only for requester */}
+                          {leave.requestedBy === user?.id && (
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              className="h-7 text-xs text-orange-700 border-orange-300 hover:bg-orange-50"
+                              onClick={() => {
+                                if (confirm('Are you sure you want to withdraw this request?')) {
+                                  withdrawMutation.mutate(leave._id);
+                                }
+                              }}
+                            >
+                              <XCircle size={14} className="mr-1" />
+                              Withdraw
+                            </Button>
+                          )}
                         </div>
                       )}
                       {leave.status === 'cancelled' && (

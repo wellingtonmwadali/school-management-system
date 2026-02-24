@@ -80,6 +80,9 @@ export const createRequest = async (req: AuthRequest, res: Response): Promise<vo
     let approverId = approverSetting?.approverId;
     let approverName = approverSetting?.approverName || 'Principal';
 
+    // Track if we had to default to principal
+    let usedDefaultApprover = false;
+
     // Default to principal if no approver set
     if (!approverId) {
       const principal = await User.findOne({ 
@@ -89,6 +92,14 @@ export const createRequest = async (req: AuthRequest, res: Response): Promise<vo
       if (principal) {
         approverId = principal._id;
         approverName = `${principal.firstName} ${principal.lastName}`;
+        usedDefaultApprover = true;
+        console.log(`⚠️  No approver assigned for ${subjectName} (${requestType}), defaulting to principal: ${approverName}`);
+      } else {
+        res.status(400).json({ 
+          success: false, 
+          message: 'No approver has been assigned for you. Please contact your administrator to set up an approver before submitting requests.' 
+        });
+        return;
       }
     }
 
@@ -176,6 +187,7 @@ export const createRequest = async (req: AuthRequest, res: Response): Promise<vo
       success: true,
       data: request,
       message: 'Request submitted successfully',
+      warning: usedDefaultApprover ? 'No specific approver was assigned. Your request has been sent to the principal for approval. Please ask your administrator to set up an approver for future requests.' : undefined,
     });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
@@ -525,18 +537,49 @@ export const setApprover = async (req: AuthRequest, res: Response): Promise<void
     const { subjectId, subjectModel, requestType, approverId } = req.body;
     const schoolId = req.user?.schoolId;
 
-    // Get names
+    // Validate required fields
+    if (!subjectId || !subjectModel || !requestType || !approverId) {
+      res.status(400).json({ 
+        success: false, 
+        message: 'Missing required fields: subjectId, subjectModel, requestType, and approverId are required' 
+      });
+      return;
+    }
+
+    // Validate subject model
+    if (!['Staff', 'Student'].includes(subjectModel)) {
+      res.status(400).json({ 
+        success: false, 
+        message: 'subjectModel must be either "Staff" or "Student"' 
+      });
+      return;
+    }
+
+    // Get and validate subject exists
     let subjectName = '';
     if (subjectModel === 'Staff') {
       const staff = await Staff.findById(subjectId);
-      subjectName = staff ? `${staff.firstName} ${staff.lastName}` : '';
+      if (!staff) {
+        res.status(404).json({ success: false, message: 'Staff member not found' });
+        return;
+      }
+      subjectName = `${staff.firstName} ${staff.lastName}`;
     } else {
       const student = await Student.findById(subjectId);
-      subjectName = student ? `${student.firstName} ${student.lastName}` : '';
+      if (!student) {
+        res.status(404).json({ success: false, message: 'Student not found' });
+        return;
+      }
+      subjectName = `${student.firstName} ${student.lastName}`;
     }
 
+    // Validate approver exists
     const approver = await User.findById(approverId);
-    const approverName = approver ? `${approver.firstName} ${approver.lastName}` : '';
+    if (!approver) {
+      res.status(404).json({ success: false, message: 'Approver user not found' });
+      return;
+    }
+    const approverName = `${approver.firstName} ${approver.lastName}`;
 
     // Deactivate existing settings
     await ApproverSetting.updateMany(
@@ -555,8 +598,11 @@ export const setApprover = async (req: AuthRequest, res: Response): Promise<void
       approverName,
     });
 
+    console.log(`✅ Approver set: ${subjectName} (${subjectModel}) -> ${approverName} for ${requestType}`);
+
     res.status(201).json({ success: true, data: setting });
   } catch (error: any) {
+    console.error('❌ Error setting approver:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };

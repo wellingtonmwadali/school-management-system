@@ -586,13 +586,36 @@ function ClassAssignmentsTab() {
 function ApproversTab() {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const [subjectId, setSubjectId] = useState('');
+  const [selectedStaffIds, setSelectedStaffIds] = useState<string[]>([]); // For single mode multi-select
   const [requestType, setRequestType] = useState('all');
-  const [approverId, setApproverId] = useState('');
+  const [singleApproverId, setSingleApproverId] = useState(''); // For single assignment mode
+  const [bulkApproverId, setBulkApproverId] = useState(''); // For bulk assignment mode
   const [bulkMode, setBulkMode] = useState(false);
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
   const [selectAllStaff, setSelectAllStaff] = useState(false);
   const [selectAllStudents, setSelectAllStudents] = useState(false);
+
+  // Debug: Log state changes
+  console.log('📊 ApproversTab render:', {
+    bulkMode,
+    selectedStaffIds,
+    singleApproverId,
+    bulkApproverId,
+    selectedSubjects
+  });
+
+  // Monitor state changes
+  useEffect(() => {
+    console.log('⚡ selectedStaffIds changed:', selectedStaffIds);
+  }, [selectedStaffIds]);
+
+  useEffect(() => {
+    console.log('⚡ singleApproverId changed:', singleApproverId);
+  }, [singleApproverId]);
+
+  useEffect(() => {
+    console.log('⚡ bulkApproverId changed:', bulkApproverId);
+  }, [bulkApproverId]);
 
   const { data: approvers } = useQuery({
     queryKey: ['approvers'],
@@ -601,26 +624,24 @@ function ApproversTab() {
 
   const { data: staff } = useQuery({
     queryKey: ['staff-list'],
-    queryFn: async () => { const res = await api.get('/staff'); return res.data.data; },
+    queryFn: async () => { 
+      const res = await api.get('/staff'); 
+      console.log('👥 Staff data loaded:', {
+        count: res.data.data?.length,
+        sample: res.data.data?.slice(0, 2).map((s: any) => ({
+          _id: s._id,
+          name: `${s.firstName} ${s.lastName}`,
+          userId: s.userId?._id,
+          hasUserId: !!s.userId
+        }))
+      });
+      return res.data.data; 
+    },
   });
 
   const { data: students } = useQuery({
     queryKey: ['students-list'],
     queryFn: async () => { const res = await api.get('/students?limit=500'); return res.data.data; },
-  });
-
-  const setApproverMutation = useMutation({
-    mutationFn: (data: any) => api.post('/settings/approvers', data),
-    onSuccess: () => {
-      toast({ title: 'Success', description: 'Approver set successfully' });
-      qc.invalidateQueries({ queryKey: ['approvers'] });
-      setSubjectId('');
-      setApproverId('');
-      setSelectedSubjects([]);
-      setSelectAllStaff(false);
-      setSelectAllStudents(false);
-    },
-    onError: () => toast({ title: 'Error', description: 'Failed to set approver', variant: 'destructive' }),
   });
 
   const setBulkApproverMutation = useMutation({
@@ -640,7 +661,7 @@ function ApproversTab() {
       toast({ title: 'Success', description: 'Approvers set for all selected' });
       qc.invalidateQueries({ queryKey: ['approvers'] });
       setSelectedSubjects([]);
-      setApproverId('');
+      setBulkApproverId('');
       setSelectAllStaff(false);
       setSelectAllStudents(false);
     },
@@ -648,26 +669,42 @@ function ApproversTab() {
   });
 
   const handleSetApprover = () => {
-    // Strict validation to prevent empty strings
-    if (!subjectId || subjectId.trim() === '' || !approverId || approverId.trim() === '') {
-      toast({ title: 'Error', description: 'Please select both staff/student and approver', variant: 'destructive' });
+    // Validate at least one staff member selected
+    if (selectedStaffIds.length < 1) {
+      toast({ title: 'Error', description: 'Please select at least one staff member', variant: 'destructive' });
       return;
     }
 
-    const selected = [...(staff || []), ...(students || [])].find((s: any) => s._id === subjectId);
-    const subjectModel = staff?.find((s: any) => s._id === subjectId) ? 'Staff' : 'Student';
+    if (!singleApproverId || singleApproverId.trim() === '') {
+      toast({ title: 'Error', description: 'Please select an approver', variant: 'destructive' });
+      return;
+    }
 
-    setApproverMutation.mutate({
-      subjectId: subjectId.trim(),
-      subjectModel,
-      requestType,
-      approverId: approverId.trim(),
-    });
+    // Set approver for each selected staff member
+    const promises = selectedStaffIds.map((staffId) => 
+      api.post('/settings/approvers', {
+        subjectId: staffId.trim(),
+        subjectModel: 'Staff',
+        requestType,
+        approverId: singleApproverId.trim(),
+      })
+    );
+
+    Promise.all(promises)
+      .then(() => {
+        toast({ title: 'Success', description: `Approver set for ${selectedStaffIds.length} staff member(s)` });
+        qc.invalidateQueries({ queryKey: ['approvers'] });
+        setSelectedStaffIds([]);
+        setSingleApproverId('');
+      })
+      .catch(() => {
+        toast({ title: 'Error', description: 'Failed to set approver', variant: 'destructive' });
+      });
   };
 
   const handleBulkSetApprover = () => {
     // Strict validation for approver
-    if (!approverId || approverId.trim() === '') {
+    if (!bulkApproverId || bulkApproverId.trim() === '') {
       toast({ title: 'Error', description: 'Please select an approver', variant: 'destructive' });
       return;
     }
@@ -701,13 +738,31 @@ function ApproversTab() {
       return;
     }
 
-    setBulkApproverMutation.mutate({ subjects, requestType, approverId: approverId.trim() });
+    setBulkApproverMutation.mutate({ subjects, requestType, approverId: bulkApproverId.trim() });
   };
 
-  const toggleSubjectSelection = (id: string) => {
-    setSelectedSubjects(prev => 
-      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
-    );
+  const toggleSubjectSelection = (id: string, e?: React.ChangeEvent<HTMLInputElement>) => {
+    console.log('🟢 toggleSubjectSelection called:', { id, checked: e?.target.checked });
+    if (e) {
+      e.stopPropagation();
+    }
+    setSelectedSubjects(prev => {
+      const newSelection = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
+      console.log('🟢 Subject selection updated:', { prev, newSelection });
+      return newSelection;
+    });
+  };
+
+  const toggleStaffSelection = (id: string, e?: React.ChangeEvent<HTMLInputElement>) => {
+    console.log('🔵 toggleStaffSelection called:', { id, checked: e?.target.checked });
+    if (e) {
+      e.stopPropagation();
+    }
+    setSelectedStaffIds(prev => {
+      const newSelection = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
+      console.log('🔵 Staff selection updated:', { prev, newSelection });
+      return newSelection;
+    });
   };
 
   const handleSelectAllStaff = () => {
@@ -735,42 +790,58 @@ function ApproversTab() {
             <Button 
               variant={bulkMode ? "outline" : "default"} 
               size="sm" 
-              onClick={() => { setBulkMode(false); setSelectedSubjects([]); setSelectAllStaff(false); setSelectAllStudents(false); }}
+              onClick={() => { 
+                setBulkMode(false); 
+                setSelectedSubjects([]); 
+                setSelectAllStaff(false); 
+                setSelectAllStudents(false);
+              }}
             >
-              Single Assignment
+              Single Assignment (Staff Only)
             </Button>
             <Button 
               variant={bulkMode ? "default" : "outline"} 
               size="sm" 
-              onClick={() => { setBulkMode(true); setSubjectId(''); }}
+              onClick={() => { 
+                setBulkMode(true); 
+                setSelectedStaffIds([]);
+              }}
             >
               Bulk Assignment
             </Button>
           </div>
 
           {!bulkMode && (
-            /* Single Assignment Form */
+            /* Single Assignment Form - Staff Only, Multi-Select */
             <div className="border rounded-lg p-4">
-              <h3 className="font-medium mb-4">Assign Approver (Single)</h3>
-              <div className="grid grid-cols-4 gap-3">
-                <Select value={subjectId} onValueChange={setSubjectId}>
-                  <SelectTrigger><SelectValue placeholder="Select Staff/Student" /></SelectTrigger>
-                  <SelectContent>
-                    <div className="px-2 py-1 text-xs font-medium text-muted-foreground">Staff</div>
-                    {staff?.map((s: any) => (
-                      <SelectItem key={s._id} value={s._id}>
-                        {s.firstName} {s.lastName} - {s.staffId}
-                      </SelectItem>
-                    ))}
-                    <div className="px-2 py-1 text-xs font-medium text-muted-foreground border-t mt-2">Students</div>
-                    {students?.slice(0, 100).map((s: any) => (
-                      <SelectItem key={s._id} value={s._id}>
-                        {s.firstName} {s.lastName} - {s.admissionNumber}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <h3 className="font-medium mb-4">Assign Approver (Select Staff Members)</h3>
+              
+              {/* Staff Selection */}
+              <div className="mb-4 max-h-[250px] overflow-y-auto border rounded p-3">
+                <p className="text-sm font-medium mb-2">Select Staff Members:</p>
+                <div className="space-y-1">
+                  {staff?.map((s: any) => (
+                    <label key={`staff-checkbox-${s._id}`} className="flex items-center gap-2 p-2 hover:bg-muted rounded cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={selectedStaffIds.includes(s._id)}
+                        onChange={(e) => toggleStaffSelection(s._id, e)}
+                        className="h-4 w-4"
+                      />
+                      <span className="text-sm">{s.firstName} {s.lastName} - {s.staffId}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
 
+              {selectedStaffIds.length > 0 && (
+                <div className="mb-3 p-2 bg-blue-50 rounded text-sm">
+                  <strong>{selectedStaffIds.length}</strong> staff member(s) selected
+                </div>
+              )}
+
+              {/* Controls */}
+              <div className="grid grid-cols-3 gap-3">
                 <Select value={requestType} onValueChange={setRequestType}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -781,23 +852,59 @@ function ApproversTab() {
                   </SelectContent>
                 </Select>
 
-                <Select value={approverId} onValueChange={setApproverId}>
-                  <SelectTrigger><SelectValue placeholder="Select Approver" /></SelectTrigger>
+                <Select 
+                  key="single-mode-approver-select"
+                  value={String(singleApproverId || '')} 
+                  onValueChange={(value) => {
+                    console.log('🟡 Single approver changed:', { 
+                      value, 
+                      type: typeof value,
+                      isArray: Array.isArray(value),
+                      currentStaffIds: selectedStaffIds 
+                    });
+                    setSingleApproverId(String(value));
+                  }}
+                  onOpenChange={(open) => {
+                    console.log('🟡 Single approver dropdown toggled:', { 
+                      open, 
+                      currentValue: singleApproverId,
+                      selectedStaffIds,
+                      staffCount: staff?.length
+                    });
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select Approver" />
+                  </SelectTrigger>
                   <SelectContent>
-                    {staff?.filter((s: any) => s.userId).map((s: any) => (
-                      <SelectItem key={s.userId._id} value={s.userId._id}>
-                        {s.firstName} {s.lastName}
-                      </SelectItem>
-                    ))}
+                    {staff?.filter((s: any) => s.userId).map((s: any) => {
+                      const itemValue = String(s.userId._id || s.userId);
+                      const isSelected = itemValue === singleApproverId;
+                      console.log('🔶 Rendering single approver item:', { 
+                        name: `${s.firstName} ${s.lastName}`, 
+                        userId: itemValue,
+                        rawUserId: s.userId,
+                        userIdType: typeof s.userId,
+                        isSelected,
+                        currentValue: singleApproverId,
+                        valueType: typeof itemValue,
+                        isInStaffSelection: selectedStaffIds.includes(s._id)
+                      });
+                      return (
+                        <SelectItem key={`single-approver-${itemValue}`} value={itemValue}>
+                          {s.firstName} {s.lastName}
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
 
                 <Button 
                   onClick={handleSetApprover} 
-                  disabled={setApproverMutation.isPending || !subjectId || subjectId.trim() === '' || !approverId || approverId.trim() === ''}
+                  disabled={selectedStaffIds.length === 0 || !singleApproverId || singleApproverId.trim() === ''}
                 >
-                  {setApproverMutation.isPending ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Plus size={16} className="mr-2" />}
-                  Set
+                  <Plus size={16} className="mr-2" />
+                  Set for {selectedStaffIds.length} Staff
                 </Button>
               </div>
             </div>
@@ -837,11 +944,11 @@ function ApproversTab() {
                   <div className="space-y-2">
                     <div className="text-xs text-muted-foreground font-medium mb-1">Staff</div>
                     {staff?.map((s: any) => (
-                      <label key={s._id} className="flex items-center gap-2 p-2 hover:bg-muted rounded cursor-pointer">
+                      <label key={`bulk-staff-${s._id}`} className="flex items-center gap-2 p-2 hover:bg-muted rounded cursor-pointer">
                         <input 
                           type="checkbox" 
                           checked={selectedSubjects.includes(s._id)}
-                          onChange={() => toggleSubjectSelection(s._id)}
+                          onChange={(e) => toggleSubjectSelection(s._id, e)}
                           className="h-4 w-4"
                         />
                         <span className="text-sm">{s.firstName} {s.lastName} - {s.staffId}</span>
@@ -849,11 +956,11 @@ function ApproversTab() {
                     ))}
                     <div className="text-xs text-muted-foreground font-medium mb-1 mt-3 pt-2 border-t">Students</div>
                     {students?.slice(0, 50).map((s: any) => (
-                      <label key={s._id} className="flex items-center gap-2 p-2 hover:bg-muted rounded cursor-pointer">
+                      <label key={`bulk-student-${s._id}`} className="flex items-center gap-2 p-2 hover:bg-muted rounded cursor-pointer">
                         <input 
                           type="checkbox" 
                           checked={selectedSubjects.includes(s._id)}
-                          onChange={() => toggleSubjectSelection(s._id)}
+                          onChange={(e) => toggleSubjectSelection(s._id, e)}
                           className="h-4 w-4"
                         />
                         <span className="text-sm">{s.firstName} {s.lastName} - {s.admissionNumber}</span>
@@ -875,18 +982,38 @@ function ApproversTab() {
                   </SelectContent>
                 </Select>
 
-                <Select value={approverId} onValueChange={setApproverId}>
+                <Select 
+                  key="bulk-mode-approver-select"
+                  value={String(bulkApproverId || '')} 
+                  onValueChange={(value) => {
+                    console.log('🟢 Bulk approver changed:', { 
+                      value, 
+                      type: typeof value,
+                      isArray: Array.isArray(value)
+                    });
+                    setBulkApproverId(String(value));
+                  }}
+                >
                   <SelectTrigger><SelectValue placeholder="Select Approver" /></SelectTrigger>
                   <SelectContent>
-                    {staff?.filter((s: any) => s.userId).map((s: any) => (
-                      <SelectItem key={s.userId._id} value={s.userId._id}>
-                        {s.firstName} {s.lastName}
-                      </SelectItem>
-                    ))}
+                    {staff?.filter((s: any) => s.userId).map((s: any) => {
+                      const itemValue = String(s.userId._id || s.userId);
+                      console.log('🟢 Rendering bulk approver item:', {
+                        name: `${s.firstName} ${s.lastName}`,
+                        userId: itemValue,
+                        rawUserId: s.userId,
+                        userIdType: typeof s.userId
+                      });
+                      return (
+                        <SelectItem key={`bulk-approver-${itemValue}`} value={itemValue}>
+                          {s.firstName} {s.lastName}
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
 
-                <Button onClick={handleBulkSetApprover} disabled={setBulkApproverMutation.isPending || !approverId}>
+                <Button onClick={handleBulkSetApprover} disabled={setBulkApproverMutation.isPending || !bulkApproverId}>
                   {setBulkApproverMutation.isPending ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Plus size={16} className="mr-2" />}
                   Set for {selectAllStaff ? `All Staff (${staff?.length})` : selectAllStudents ? `All Students (${students?.length})` : `Selected (${selectedSubjects.length})`}
                 </Button>
