@@ -288,8 +288,28 @@ export const getClinicVisits = async (req: AuthRequest, res: Response): Promise<
   const { studentId } = req.query;
   const query: Record<string, unknown> = { schoolId: req.user?.schoolId };
   if (studentId) query.studentId = studentId;
-  const visits = await ClinicVisit.find(query).populate('studentId', 'firstName lastName admissionNumber').sort({ date: -1 });
+  const visits = await ClinicVisit.find(query)
+    .populate('studentId', 'firstName lastName admissionNumber currentClass currentStream')
+    .populate('attendedBy', 'firstName lastName')
+    .sort({ date: -1 });
   res.json({ success: true, data: visits });
+};
+
+export const getMedicalStats = async (req: AuthRequest, res: Response): Promise<void> => {
+  const schoolId = req.user?.schoolId;
+  
+  // Get total medications dispensed count
+  const visits = await ClinicVisit.find({ schoolId });
+  const medicationsDispensed = visits.reduce((total, visit) => {
+    return total + (visit.medicationDispensed?.length || 0);
+  }, 0);
+
+  res.json({ 
+    success: true, 
+    data: { 
+      medicationsDispensed 
+    } 
+  });
 };
 
 export const updateClinicVisit = async (req: AuthRequest, res: Response): Promise<void> => {

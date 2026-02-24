@@ -12,7 +12,7 @@ import {
   createIncident, getIncidents, updateIncident,
   createCase, getCases, updateCase, addCaseSession,
   getBooks, createBook, checkoutBook, returnBook,
-  createClinicVisit, getClinicVisits, updateClinicVisit,
+  createClinicVisit, getClinicVisits, updateClinicVisit, getMedicalStats,
   createAnnouncement, getAnnouncements,
   getNotifications, markNotificationRead,
   getUsers, toggleUserStatus,
@@ -163,6 +163,7 @@ router.post('/library/checkout', protect, authorize('librarian'), checkoutBook);
 router.put('/library/return/:id', protect, authorize('librarian'), validateMongoId, returnBook);
 
 // Medical
+router.get('/medical/stats', protect, cacheHelper.short, getMedicalStats);
 router.get('/medical/visits', protect, validatePagination, cacheHelper.medium, getClinicVisits);
 router.post('/medical/visits', protect, createClinicVisit);
 router.patch('/medical/visits/:id', protect, validateMongoId, updateClinicVisit);

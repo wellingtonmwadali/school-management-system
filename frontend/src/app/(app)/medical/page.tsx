@@ -23,8 +23,6 @@ import {
   Thermometer
 } from 'lucide-react';
 
-const VISIT_TYPES = ['Sick Visit', 'Injury', 'Medication', 'Checkup', 'Emergency', 'Follow-up'];
-const SEVERITY_LEVELS = ['Minor', 'Moderate', 'Serious', 'Critical'];
 const COMMON_MEDICATIONS = [
   'Paracetamol',
   'Ibuprofen',
@@ -45,27 +43,31 @@ interface MedicalVisit {
     firstName: string;
     lastName: string;
     currentStream: string;
+    currentClass: string;
     admissionNumber: string;
   };
-  visitType: string;
-  symptoms: string;
-  diagnosis: string;
-  severity: string;
-  temperature?: number;
-  bloodPressure?: string;
-  medication: {
+  date: string;
+  time: string;
+  complaint: string;
+  assessment: string;
+  treatment: string;
+  medicationDispensed: {
     name: string;
     dosage: string;
-    frequency: string;
-    duration: string;
+    quantity: number;
   }[];
-  treatment: string;
-  notes: string;
-  date: string;
-  nurseId: string;
-  followUpRequired: boolean;
+  referredToHospital: boolean;
+  hospitalName?: string;
+  parentNotified: boolean;
+  attendedBy: {
+    _id: string;
+    firstName: string;
+    lastName: string;
+  };
   followUpDate?: string;
-  status: 'active' | 'resolved' | 'referred';
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export default function MedicalPage() {
@@ -74,9 +76,6 @@ export default function MedicalPage() {
   const [showAddVisit, setShowAddVisit] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
   const [studentSearch, setStudentSearch] = useState('');
-  const [filterType, setFilterType] = useState('');
-  const [filterSeverity, setFilterSeverity] = useState('');
-  const [filterStatus, setFilterStatus] = useState('active');
 
   const [form, setForm] = useState({
     studentId: '',
@@ -106,13 +105,9 @@ export default function MedicalPage() {
 
   // Get medical visits
   const { data: visits, isLoading } = useQuery({
-    queryKey: ['medical-visits', filterType, filterSeverity, filterStatus],
+    queryKey: ['medical-visits'],
     queryFn: async () => {
-      const params = new URLSearchParams();
-      if (filterType && filterType !== 'all') params.append('visitType', filterType);
-      if (filterSeverity && filterSeverity !== 'all') params.append('severity', filterSeverity);
-      if (filterStatus && filterStatus !== 'all') params.append('status', filterStatus);
-      const res = await api.get(`/medical/visits?${params}`);
+      const res = await api.get('/medical/visits');
       return res.data.data as MedicalVisit[];
     },
   });
@@ -158,16 +153,6 @@ export default function MedicalPage() {
         description: error.response?.data?.message || 'Failed to record visit', 
         variant: 'destructive' 
       });
-    },
-  });
-
-  // Update visit status
-  const updateStatusMutation = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: string }) => 
-      api.patch(`/medical/visits/${id}`, { status }),
-    onSuccess: () => {
-      toast({ title: 'Status Updated', description: 'Visit status updated successfully' });
-      queryClient.invalidateQueries({ queryKey: ['medical-visits'] });
     },
   });
 
@@ -217,8 +202,8 @@ export default function MedicalPage() {
   };
 
   const totalVisits = visits?.length || 0;
-  const activeVisits = visits?.filter(v => v.status === 'active').length || 0;
-  const criticalCases = visits?.filter(v => v.severity === 'Critical').length || 0;
+  const hospitalReferred = visits?.filter(v => v.referredToHospital).length || 0;
+  const parentNotified = visits?.filter(v => v.parentNotified).length || 0;
 
   return (
     <div className="space-y-6">
@@ -257,8 +242,8 @@ export default function MedicalPage() {
                 <Activity className="h-6 w-6 text-orange-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{activeVisits}</p>
-                <p className="text-sm text-muted-foreground">Active Cases</p>
+                <p className="text-2xl font-bold">{hospitalReferred}</p>
+                <p className="text-sm text-muted-foreground">Hospital Referred</p>
               </div>
             </div>
           </CardContent>
@@ -271,8 +256,8 @@ export default function MedicalPage() {
                 <AlertCircle className="h-6 w-6 text-red-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{criticalCases}</p>
-                <p className="text-sm text-muted-foreground">Critical Cases</p>
+                <p className="text-2xl font-bold">{parentNotified}</p>
+                <p className="text-sm text-muted-foreground">Parents Notified</p>
               </div>
             </div>
           </CardContent>
@@ -293,58 +278,6 @@ export default function MedicalPage() {
         </Card>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-3 flex-wrap">
-        <Select value={filterType || undefined} onValueChange={(v) => setFilterType(v === 'all' ? '' : v)}>
-          <SelectTrigger className="w-40">
-            <SelectValue placeholder="Visit Type" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Types</SelectItem>
-            {VISIT_TYPES.map(type => (
-              <SelectItem key={type} value={type}>{type}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select value={filterSeverity || undefined} onValueChange={(v) => setFilterSeverity(v === 'all' ? '' : v)}>
-          <SelectTrigger className="w-40">
-            <SelectValue placeholder="Severity" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Severity</SelectItem>
-            {SEVERITY_LEVELS.map(level => (
-              <SelectItem key={level} value={level}>{level}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select value={filterStatus || undefined} onValueChange={(v) => setFilterStatus(v === 'all' ? '' : v)}>
-          <SelectTrigger className="w-40">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="resolved">Resolved</SelectItem>
-            <SelectItem value="referred">Referred</SelectItem>
-          </SelectContent>
-        </Select>
-
-        {(filterType || filterSeverity || (filterStatus && filterStatus !== 'active')) && (
-          <Button
-            variant="ghost"
-            onClick={() => {
-              setFilterType('');
-              setFilterSeverity('');
-              setFilterStatus('active');
-            }}
-          >
-            Clear Filters
-          </Button>
-        )}
-      </div>
-
       {/* Visits Table */}
       <Card>
         <CardHeader>
@@ -359,13 +292,12 @@ export default function MedicalPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Student</TableHead>
-                  <TableHead>Visit Type</TableHead>
-                  <TableHead>Symptoms</TableHead>
-                  <TableHead>Diagnosis</TableHead>
-                  <TableHead>Severity</TableHead>
-                  <TableHead>Medication</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>Date & Time</TableHead>
+                  <TableHead>Complaint</TableHead>
+                  <TableHead>Assessment</TableHead>
+                  <TableHead>Treatment</TableHead>
+                  <TableHead>Medications</TableHead>
+                  <TableHead>Hospital Referral</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -378,39 +310,36 @@ export default function MedicalPage() {
                           {visit.studentId?.firstName} {visit.studentId?.lastName}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {visit.studentId?.admissionNumber} • {visit.studentId?.currentStream}
+                          {visit.studentId?.admissionNumber} • {visit.studentId?.currentClass} {visit.studentId?.currentStream}
                         </p>
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline">{visit.visitType}</Badge>
+                      <div>
+                        <p className="text-sm">{formatDate(visit.date)}</p>
+                        <p className="text-xs text-muted-foreground">{visit.time}</p>
+                      </div>
                     </TableCell>
-                    <TableCell className="max-w-[200px] truncate">{visit.symptoms}</TableCell>
-                    <TableCell className="max-w-[200px] truncate">{visit.diagnosis || '—'}</TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          visit.severity === 'Critical'
-                            ? 'destructive'
-                            : visit.severity === 'Serious'
-                            ? 'secondary'
-                            : 'outline'
-                        }
-                      >
-                        {visit.severity}
-                      </Badge>
+                    <TableCell className="max-w-[200px]">
+                      <p className="truncate" title={visit.complaint}>{visit.complaint}</p>
+                    </TableCell>
+                    <TableCell className="max-w-[200px]">
+                      <p className="truncate" title={visit.assessment || ''}>{visit.assessment || '—'}</p>
+                    </TableCell>
+                    <TableCell className="max-w-[200px]">
+                      <p className="truncate" title={visit.treatment || ''}>{visit.treatment || '—'}</p>
                     </TableCell>
                     <TableCell>
-                      {visit.medication && visit.medication.length > 0 ? (
+                      {visit.medicationDispensed && visit.medicationDispensed.length > 0 ? (
                         <div className="space-y-1">
-                          {visit.medication.slice(0, 2).map((med, idx) => (
+                          {visit.medicationDispensed.slice(0, 2).map((med, idx) => (
                             <p key={idx} className="text-xs">
-                              {med.name} - {med.dosage}
+                              {med.name} - {med.dosage} (×{med.quantity})
                             </p>
                           ))}
-                          {visit.medication.length > 2 && (
+                          {visit.medicationDispensed.length > 2 && (
                             <p className="text-xs text-muted-foreground">
-                              +{visit.medication.length - 2} more
+                              +{visit.medicationDispensed.length - 2} more
                             </p>
                           )}
                         </div>
@@ -418,33 +347,32 @@ export default function MedicalPage() {
                         '—'
                       )}
                     </TableCell>
-                    <TableCell className="text-sm">{formatDate(visit.date)}</TableCell>
                     <TableCell>
-                      <Badge
-                        variant={
-                          visit.status === 'active'
-                            ? 'default'
-                            : visit.status === 'resolved'
-                            ? 'secondary'
-                            : 'outline'
-                        }
-                      >
-                        {visit.status}
-                      </Badge>
+                      {visit.referredToHospital ? (
+                        <div>
+                          <Badge variant="destructive">Referred</Badge>
+                          {visit.hospitalName && (
+                            <p className="text-xs text-muted-foreground mt-1">{visit.hospitalName}</p>
+                          )}
+                        </div>
+                      ) : (
+                        <Badge variant="outline">No</Badge>
+                      )}
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1">
-                        {visit.status === 'active' && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() =>
-                              updateStatusMutation.mutate({ id: visit._id, status: 'resolved' })
-                            }
-                          >
-                            Resolve
-                          </Button>
-                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            toast({ 
+                              title: 'Visit Details', 
+                              description: `Attended by: ${visit.attendedBy?.firstName || 'Unknown'} ${visit.attendedBy?.lastName || ''}` 
+                            });
+                          }}
+                        >
+                          <FileText className="h-4 w-4" />
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>

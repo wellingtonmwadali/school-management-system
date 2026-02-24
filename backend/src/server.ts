@@ -78,25 +78,6 @@ app.get('/ready', readinessProbe);
 app.get('/alive', livenessProbe);
 app.get('/metrics', metrics);
 
-// API Routes
-app.use('/api/v1', routes);
-
-// Root route
-app.get('/', (req, res) => {
-  res.status(200).json({
-    status: 'success',
-    message: 'School ERP Backend Running'
-  });
-});
-
-// 404 Handler
-app.use(notFound);
-
-// Global error handler
-app.use(errorHandler);
-
-const PORT = Number(process.env.PORT) || 5000;
-
 // Database connection state
 let dbInitialized = false;
 let dbInitPromise: Promise<void> | null = null;
@@ -127,38 +108,54 @@ const initDatabase = async () => {
   return dbInitPromise;
 };
 
-// For non-serverless environments, connect immediately
-// But don't crash if it fails - let health checks report status
-if (process.env.VERCEL !== '1') {
-  initDatabase().catch(err => {
-    logger.error('Failed to initialize database on startup:', err);
-    logger.warn('Server will continue running - retrying DB connection on next request');
-    // Don't exit - allow server to start and serve health checks
-    // Health endpoint will report database status
-  });
-}
+// Middleware to ensure DB is connected before processing requests
+app.use(async (req, res, next) => {
+  // Skip health check endpoints to avoid circular dependency
+  if (req.path === '/health' || req.path === '/alive' || req.path === '/ready' || req.path === '/metrics' || req.path === '/') {
+    return next();
+  }
+  
+  try {
+    await initDatabase();
+    next();
+  } catch (error) {
+    logger.error('Database not available for request:', error);
+    res.status(503).json({ 
+      error: 'Service temporarily unavailable',
+      message: 'Database connection not ready',
+      details: process.env.NODE_ENV === 'development' ? String(error) : undefined
+    });
+  }
+});
 
-// Middleware to ensure DB is connected in serverless
-if (process.env.VERCEL === '1') {
-  app.use(async (req, res, next) => {
-    try {
-      await initDatabase();
-      next();
-    } catch (error) {
-      logger.error('Database initialization failed in request:', error);
-      res.status(503).json({ 
-        error: 'Service temporarily unavailable',
-        message: 'Database connection failed',
-        details: process.env.NODE_ENV === 'development' ? String(error) : undefined
-      });
-    }
+// API Routes
+app.use('/api/v1', routes);
+
+// Root route
+app.get('/', (req, res) => {
+  res.status(200).json({
+    status: 'success',
+    message: 'School ERP Backend Running'
   });
-}
+});
+
+// 404 Handler
+app.use(notFound);
+
+// Global error handler
+app.use(errorHandler);
+
+const PORT = Number(process.env.PORT) || 5000;
 
 // Only start server if not in Vercel serverless environment
 if (process.env.VERCEL !== '1') {
   const start = async () => {
     try {
+      // Initialize database connection first
+      logger.info('Initializing database connection...');
+      await initDatabase();
+      logger.info('✅ Database connected successfully');
+      
       // Bind to 0.0.0.0 for Docker/Cloud platforms (Render, Railway, etc.)
       // This allows external connections, not just localhost
       const HOST = process.env.HOST || '0.0.0.0';

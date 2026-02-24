@@ -7,8 +7,11 @@ import { Providers } from './providers';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'School ERP - Management System',
+  title: 'Green Field School - Management System',
   description: 'Comprehensive school management ERP system',
+  icons: {
+    icon: '../../assets/ghs.jpg',
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

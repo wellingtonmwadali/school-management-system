@@ -913,56 +913,116 @@ function ApproversTab() {
 
               {/* Class-based Student Selection */}
               <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                <h4 className="text-sm font-medium mb-3">Assign Class Teacher for Students</h4>
-                <div className="grid grid-cols-3 gap-3 mb-3">
-                  <div>
-                    <Label className="text-xs">Select Class</Label>
-                    <Select value={selectedClass} onValueChange={(val) => {
-                      setSelectedClass(val);
-                      setSelectedStream('');
-                      setSelectAllStudents(false);
-                      setBulkApproverId('');
-                    }}>
-                      <SelectTrigger><SelectValue placeholder="Choose Class" /></SelectTrigger>
-                      <SelectContent>
-                        {getUniqueClasses().map((cls) => (
-                          <SelectItem key={cls} value={cls}>{cls}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label className="text-xs">Select Stream</Label>
-                    <Select value={selectedStream} onValueChange={(val) => {
-                      setSelectedStream(val);
-                      setSelectAllStudents(false);
-                      // Auto-set class teacher
-                      const classTeacher = staff?.find((s: any) => s.classTeacherOf === `${selectedClass} ${val}`);
-                      if (classTeacher && classTeacher.userId) {
-                        setBulkApproverId(String(classTeacher.userId._id || classTeacher.userId));
-                      }
-                    }} disabled={!selectedClass}>
-                      <SelectTrigger><SelectValue placeholder="Choose Stream" /></SelectTrigger>
-                      <SelectContent>
-                        {getStreamsForClass().map((stream) => (
-                          <SelectItem key={stream} value={stream}>{stream}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label className="text-xs">Class Teacher</Label>
-                    <Input 
-                      value={getClassTeacher() ? `${getClassTeacher()?.firstName} ${getClassTeacher()?.lastName}` : 'Not assigned'} 
-                      disabled 
-                      className="bg-gray-100"
-                    />
-                  </div>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-sm font-medium">Assign Class Teacher for Students</h4>
+                  {(selectedClass || selectedStream) && (
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => {
+                        setSelectedClass('');
+                        setSelectedStream('');
+                        setBulkApproverId('');
+                      }}
+                    >
+                      Clear Selection
+                    </Button>
+                  )}
                 </div>
-                {selectedClass && selectedStream && (
-                  <div className="text-sm text-blue-700">
-                    <strong>{getStudentsInClass().length}</strong> student(s) in {selectedClass} {selectedStream}
-                  </div>
+                {!students ? (
+                  <p className="text-sm text-muted-foreground">Loading students...</p>
+                ) : getUniqueClasses().length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No students found in the system</p>
+                ) : (
+                  <>
+                    <div className="mb-3 p-2 bg-white rounded border text-xs text-muted-foreground">
+                      Available classes: {getUniqueClasses().join(', ')} ({students?.length || 0} students total)
+                    </div>
+                    <div className="grid grid-cols-3 gap-3 mb-3">
+                      <div>
+                        <Label className="text-xs">Select Class</Label>
+                        <Select 
+                          value={selectedClass || undefined} 
+                          onValueChange={(val) => {
+                            console.log('Class selected:', val);
+                            setSelectedClass(val);
+                            setSelectedStream('');
+                            setSelectAllStudents(false);
+                            setBulkApproverId('');
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Choose Class" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {getUniqueClasses().map((cls) => (
+                              <SelectItem key={cls} value={cls}>{cls}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-xs">Select Stream</Label>
+                        <Select 
+                          value={selectedStream || undefined} 
+                          onValueChange={(val) => {
+                            console.log('Stream selected:', val);
+                            setSelectedStream(val);
+                            setSelectAllStudents(false);
+                            // Auto-set class teacher
+                            const classTeacher = staff?.find((s: any) => s.classTeacherOf === `${selectedClass} ${val}`);
+                            console.log('Class teacher found:', classTeacher);
+                            if (classTeacher && classTeacher.userId) {
+                              setBulkApproverId(String(classTeacher.userId._id || classTeacher.userId));
+                            } else {
+                              setBulkApproverId('');
+                            }
+                          }} 
+                          disabled={!selectedClass}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder={selectedClass ? "Choose Stream" : "Select class first"} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {getStreamsForClass().length > 0 ? (
+                              getStreamsForClass().map((stream) => (
+                                <SelectItem key={stream} value={stream}>{stream}</SelectItem>
+                              ))
+                            ) : (
+                              <SelectItem value="no-streams" disabled>No streams found</SelectItem>
+                            )}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-xs">Class Teacher</Label>
+                        <Input 
+                          value={getClassTeacher() ? `${getClassTeacher()?.firstName} ${getClassTeacher()?.lastName}` : (selectedClass && selectedStream ? 'Not assigned' : '')} 
+                          disabled 
+                          className="bg-gray-100"
+                          placeholder="Auto-filled"
+                        />
+                        {selectedClass && selectedStream && !getClassTeacher() && (
+                          <p className="text-xs text-amber-600 mt-1">
+                            No class teacher assigned. Please select an approver manually below.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    {selectedClass && selectedStream && (
+                      <div className="text-sm text-blue-700">
+                        <strong>{getStudentsInClass().length}</strong> student(s) in {selectedClass} {selectedStream}
+                        {getStudentsInClass().length === 0 && (
+                          <span className="text-amber-600"> - Warning: No students found in this class</span>
+                        )}
+                      </div>
+                    )}
+                    {selectedClass && !selectedStream && (
+                      <div className="text-sm text-muted-foreground">
+                        Please select a stream to continue
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
 
@@ -1029,7 +1089,14 @@ function ApproversTab() {
                   </SelectContent>
                 </Select>
 
-                <Button onClick={handleBulkSetApprover} disabled={setBulkApproverMutation.isPending || !bulkApproverId}>
+                <Button 
+                  onClick={handleBulkSetApprover} 
+                  disabled={
+                    setBulkApproverMutation.isPending || 
+                    !bulkApproverId || 
+                    (selectedClass && selectedStream && getStudentsInClass().length === 0)
+                  }
+                >
                   {setBulkApproverMutation.isPending ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Plus size={16} className="mr-2" />}
                   Set for {selectAllStaff ? `All Staff (${staff?.length})` : (selectedClass && selectedStream) ? `${selectedClass} ${selectedStream} (${getStudentsInClass().length})` : selectAllStudents ? `All Students (${students?.length})` : `Selected (${selectedSubjects.length})`}
                 </Button>
