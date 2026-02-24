@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
+import mongoose from 'mongoose';
 import User, { IUser } from '../models/User';
 import SchoolConfig from '../models/SchoolConfig';
 import { AuthRequest } from '../types';
@@ -17,6 +18,23 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   console.log('🔐 LOGIN REQUEST RECEIVED');
   console.log('🔐 ============================================');
   
+  // Check database connection
+  console.log('💾 Database connection status:');
+  console.log('   - State:', mongoose.connection.readyState);
+  console.log('   - 0=disconnected, 1=connected, 2=connecting, 3=disconnecting');
+  console.log('   - Is connected:', mongoose.connection.readyState === 1);
+  console.log('   - Database name:', mongoose.connection.name || 'Not connected');
+  console.log('   - Host:', mongoose.connection.host || 'Not connected');
+  
+  if (mongoose.connection.readyState !== 1) {
+    console.log('❌ Database not connected! Cannot proceed with login.');
+    res.status(503).json({ 
+      success: false, 
+      message: 'Database connection unavailable. Please try again later.' 
+    });
+    return;
+  }
+  
   const { email, password } = req.body;
   console.log('📧 Email:', email);
   console.log('🔑 Password provided:', !!password);
@@ -29,7 +47,27 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   }
 
   console.log('🔍 Looking up user in database...');
+  console.log('🔍 Query: User.findOne({ email: "' + email + '" }).select("+password")');
+  
   const user = await User.findOne({ email }).select('+password');
+
+  console.log('📊 Database query completed');
+  console.log('📊 Query result:', user ? 'User found' : 'User NOT found');
+  
+  if (user) {
+    console.log('📊 Database returned user document:');
+    console.log('   - _id:', user._id);
+    console.log('   - firstName:', user.firstName);
+    console.log('   - lastName:', user.lastName);
+    console.log('   - email:', user.email);
+    console.log('   - role:', user.role);
+    console.log('   - schoolId:', user.schoolId);
+    console.log('   - isActive:', user.isActive);
+    console.log('   - password hash exists:', !!user.password);
+    console.log('   - password hash length:', user.password?.length || 0);
+    console.log('   - lastLogin:', user.lastLogin);
+    console.log('   - createdAt:', user.createdAt);
+  }
 
   if (!user) {
     console.log('❌ User not found with email:', email);
@@ -43,8 +81,14 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   console.log('🏫 School ID:', user.schoolId);
 
   console.log('🔐 Comparing password...');
+  console.log('🔐 Candidate password length:', password.length);
+  console.log('🔐 Stored password hash:', user.password?.substring(0, 20) + '...');
+  console.log('🔐 Calling bcrypt.compare()...');
+  
   const passwordMatch = await user.comparePassword(password);
-  console.log('🔐 Password match:', passwordMatch);
+  
+  console.log('🔐 bcrypt.compare() completed');
+  console.log('🔐 Password match result:', passwordMatch);
 
   if (!passwordMatch) {
     console.log('❌ Password comparison failed');
