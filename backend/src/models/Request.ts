@@ -223,6 +223,94 @@ const ApproverSettingSchema = new Schema<IApproverSetting>(
 
 ApproverSettingSchema.index({ schoolId: 1, subjectId: 1, requestType: 1 });
 
+// ========== REQUEST TYPE CONFIGURATION MODEL ==========
+export interface IRequestTypeConfig extends Document {
+  schoolId: mongoose.Types.ObjectId;
+  code: string; // e.g., 'annual_leave', 'sick_leave', 'medical_permission'
+  name: string; // e.g., 'Annual Leave', 'Sick Leave'
+  category: 'leave' | 'medical' | 'permission' | 'other';
+  
+  // Configuration
+  requiresDocumentation: boolean;
+  requiresSubstitute: boolean;
+  autoApprove: boolean;
+  maxDaysPerRequest: number;
+  minDaysNotice: number; // Days in advance request must be submitted
+  
+  // Eligibility
+  eligibleRoles: string[]; // e.g., ['subject_teacher', 'class_teacher', 'hod']
+  minimumServiceMonths: number; // Minimum months of service required
+  requiresProbationCompletion: boolean;
+  
+  // Leave balance (if applicable)
+  hasBalance: boolean;
+  defaultBalance: number;
+  carryForward: boolean;
+  carryForwardLimit: number;
+  
+  // Approval workflow
+  requiresMultiLevelApproval: boolean;
+  approvalLevels: {
+    level: number;
+    roleRequired: string[];
+    description: string;
+  }[];
+  
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const RequestTypeConfigSchema = new Schema<IRequestTypeConfig>(
+  {
+    schoolId: { type: Schema.Types.ObjectId, ref: 'SchoolConfig', required: true },
+    code: { type: String, required: true },
+    name: { type: String, required: true },
+    category: { 
+      type: String, 
+      enum: ['leave', 'medical', 'permission', 'other'], 
+      required: true 
+    },
+    
+    // Configuration
+    requiresDocumentation: { type: Boolean, default: false },
+    requiresSubstitute: { type: Boolean, default: false },
+    autoApprove: { type: Boolean, default: false },
+    maxDaysPerRequest: { type: Number, default: 0 }, // 0 = unlimited
+    minDaysNotice: { type: Number, default: 0 },
+    
+    // Eligibility
+    eligibleRoles: { 
+      type: [String], 
+      default: ['subject_teacher', 'class_teacher', 'hod', 'deputy_principal'] 
+    },
+    minimumServiceMonths: { type: Number, default: 0 },
+    requiresProbationCompletion: { type: Boolean, default: false },
+    
+    // Leave balance
+    hasBalance: { type: Boolean, default: false },
+    defaultBalance: { type: Number, default: 0 },
+    carryForward: { type: Boolean, default: false },
+    carryForwardLimit: { type: Number, default: 0 },
+    
+    //Approval workflow
+    requiresMultiLevelApproval: { type: Boolean, default: false },
+    approvalLevels: [{
+      level: Number,
+      roleRequired: [String],
+      description: String,
+    }],
+    
+    isActive: { type: Boolean, default: true },
+  },
+  { timestamps: true }
+);
+
+RequestTypeConfigSchema.index({ schoolId: 1, code: 1 }, { unique: true });
+RequestTypeConfigSchema.index({ schoolId: 1, isActive: 1 });
+
 export const Request = mongoose.models.Request || mongoose.model<IRequest>('Request', RequestSchema);
 export const LeaveBalance = mongoose.models.LeaveBalance || mongoose.model<ILeaveBalance>('LeaveBalance', LeaveBalanceSchema);
 export const ApproverSetting = mongoose.models.ApproverSetting || mongoose.model<IApproverSetting>('ApproverSetting', ApproverSettingSchema);
+export const RequestTypeConfig = mongoose.models.RequestTypeConfig || mongoose.model<IRequestTypeConfig>('RequestTypeConfig', RequestTypeConfigSchema);
+

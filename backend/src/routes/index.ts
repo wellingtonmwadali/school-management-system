@@ -22,7 +22,7 @@ import { getPrincipalDashboard, getFinanceDashboard, getTeacherDashboard, getStu
 import { clockIn, clockOut, getStaffAttendance, getMyAttendance, getTodayStatus } from '../controllers/staffAttendanceController';
 import { getTimetable, getUpcomingClasses, uploadTimetable, addTimetableEntry } from '../controllers/timetableController';
 import { getClassAssignments, assignClassTeacher, removeClassAssignment, getMyClassAssignment } from '../controllers/classAssignmentController';
-import { createRequest, getRequests, getMyRequests, reviewRequest, getLeaveBalance, getApproverSettings, setApprover } from '../controllers/requestController';
+import { createRequest, getRequests, getMyRequests, reviewRequest, withdrawRequest, getLeaveBalance, getApproverSettings, getMyApprover, setApprover, getRequestTypeConfigs, getRequestTypeConfig, createRequestTypeConfig, updateRequestTypeConfig, deleteRequestTypeConfig, checkRequestEligibility } from '../controllers/requestController';
 
 // Import rate limiters and validation
 import { authLimiter, paymentLimiter, uploadLimiter, exportLimiter } from '../middleware/rateLimiter';
@@ -180,11 +180,21 @@ router.get('/requests', protect, getRequests);
 router.get('/requests/my', protect, getMyRequests);
 router.post('/requests', protect, createRequest);
 router.put('/requests/:id/review', protect, validateMongoId, reviewRequest);
+router.put('/requests/:id/withdraw', protect, validateMongoId, withdrawRequest);
 router.get('/requests/leave-balance', protect, getLeaveBalance);
 
 // Approver settings
 router.get('/settings/approvers', protect, authorize('principal', 'super_admin'), getApproverSettings);
+router.get('/settings/approvers/my', protect, getMyApprover);
 router.post('/settings/approvers', protect, authorize('principal', 'super_admin'), setApprover);
+
+// Request type configurations
+router.get('/settings/request-types', protect, getRequestTypeConfigs);
+router.get('/settings/request-types/:id', protect, validateMongoId, getRequestTypeConfig);
+router.post('/settings/request-types', protect, authorize('principal', 'super_admin'), createRequestTypeConfig);
+router.put('/settings/request-types/:id', protect, authorize('principal', 'super_admin'), validateMongoId, updateRequestTypeConfig);
+router.delete('/settings/request-types/:id', protect, authorize('principal', 'super_admin'), validateMongoId, deleteRequestTypeConfig);
+router.get('/settings/request-types/:configId/check-eligibility', protect, validateMongoId, checkRequestEligibility);
 
 // Announcements
 router.get('/announcements', protect, getAnnouncements);

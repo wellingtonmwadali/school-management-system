@@ -1,5 +1,5 @@
 import { Response } from 'express';
-import { Request, LeaveBalance, ApproverSetting } from '../models/Request';
+import { Request, LeaveBalance, ApproverSetting, RequestTypeConfig } from '../models/Request';
 import Staff from '../models/Staff';
 import Student from '../models/Student';
 import Parent from '../models/Parent';
@@ -98,6 +98,29 @@ export const createRequest = async (req: AuthRequest, res: Response): Promise<vo
       const start = new Date(startDate);
       const end = new Date(endDate);
       totalDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    }
+
+    // Check leave balance if it's a leave request
+    if (requestType === 'leave' && leaveType && totalDays > 0) {
+      const academicYear = new Date().getFullYear().toString();
+      const leaveBalance = await LeaveBalance.findOne({
+        schoolId,
+        staffId: subjectId,
+        academicYear,
+      });
+
+      if (leaveBalance) {
+        const balanceKey = leaveType as keyof typeof leaveBalance;
+        const balance = leaveBalance[balanceKey] as any;
+        
+        if (balance && balance.remaining < totalDays) {
+          res.status(400).json({ 
+            success: false, 
+            message: `Insufficient ${leaveType} leave balance. Available: ${balance.remaining} days, Requested: ${totalDays} days` 
+          });
+          return;
+        }
+      }
     }
 
     // Create request
@@ -254,6 +277,15 @@ export const reviewRequest = async (req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
+    // Can't review already reviewed/cancelled requests
+    if (request.status !== 'pending') {
+      res.status(400).json({ 
+        success: false, 
+        message: `Cannot review a request that is already ${request.status}` 
+      });
+      return;
+    }
+
     // Update request
     request.status = status;
     request.reviewedAt = new Date();
@@ -313,6 +345,70 @@ export const reviewRequest = async (req: AuthRequest, res: Response): Promise<vo
   }
 };
 
+// Withdraw/cancel own request
+export const withdrawRequest = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const userId = req.user?.id;
+
+    const request = await Request.findById(id);
+    if (!request) {
+      res.status(404).json({ success: false, message: 'Request not found' });
+      return;
+    }
+
+    // Check if user is the requester
+    if (request.requestedBy.toString() !== userId) {
+      res.status(403).json({ 
+        success: false, 
+        message: 'You can only withdraw your own requests' 
+      });
+      return;
+    }
+
+    // Can only withdraw pending requests
+    if (request.status !== 'pending') {
+      res.status(400).json({ 
+        success: false, 
+        message: `Cannot withdraw a request that is already ${request.status}` 
+      });
+      return;
+    }
+
+    // Update request status to cancelled
+    request.status = 'cancelled';
+    await request.save();
+
+    // Send email notification to approver
+    try {
+      const approver = await User.findById(request.approverId);
+      if (approver && approver.email) {
+        await sendEmail({
+          to: approver.email,
+          subject: `Request withdrawn: ${request.title}`,
+          html: `
+            <h2>Request Withdrawn</h2>
+            <p><strong>Title:</strong> ${request.title}</p>
+            <p><strong>Type:</strong> ${request.requestType}</p>
+            <p><strong>Requested by:</strong> ${request.requestedByName}</p>
+            <p>This request has been withdrawn by the requester.</p>
+          `,
+        });
+      }
+    } catch (emailError) {
+      console.error('Email notification failed:', emailError);
+    }
+
+    res.json({ 
+      success: true, 
+      data: request,
+      message: 'Request withdrawn successfully' 
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // Get leave balance
 export const getLeaveBalance = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -361,6 +457,69 @@ export const getApproverSettings = async (req: AuthRequest, res: Response): Prom
   }
 };
 
+// Get my approver (for current user)
+export const getMyApprover = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const schoolId = req.user?.schoolId;
+    const userId = req.user?.id;
+    const { requestType } = req.query;
+
+    // Find staff profile
+    const staff = await Staff.findOne({ userId, schoolId });
+    if (!staff) {
+      res.status(404).json({ success: false, message: 'Staff profile not found' });
+      return;
+    }
+
+    // Find approver setting for this staff member
+    const approverSetting = await ApproverSetting.findOne({
+      schoolId,
+      subjectId: staff._id,
+      $or: [
+        { requestType: requestType || 'all' },
+        { requestType: 'all' }
+      ],
+      isActive: true,
+    }).sort({ createdAt: -1 }); // Get most recent if multiple
+
+    if (approverSetting) {
+      const approver = await User.findById(approverSetting.approverId);
+      res.json({ 
+        success: true, 
+        data: {
+          approverId: approverSetting.approverId,
+          approverName: approverSetting.approverName,
+          approverEmail: approver?.email,
+          requestType: approverSetting.requestType,
+        }
+      });
+    } else {
+      // Default to principal
+      const principal = await User.findOne({ 
+        schoolId, 
+        role: { $in: ['principal', 'super_admin'] } 
+      });
+      
+      if (principal) {
+        res.json({ 
+          success: true, 
+          data: {
+            approverId: principal._id,
+            approverName: `${principal.firstName} ${principal.lastName}`,
+            approverEmail: principal.email,
+            requestType: 'all',
+            isDefault: true,
+          }
+        });
+      } else {
+        res.status(404).json({ success: false, message: 'No approver found' });
+      }
+    }
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 export const setApprover = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { subjectId, subjectModel, requestType, approverId } = req.body;
@@ -397,6 +556,210 @@ export const setApprover = async (req: AuthRequest, res: Response): Promise<void
     });
 
     res.status(201).json({ success: true, data: setting });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ========== REQUEST TYPE CONFIGURATION ==========
+
+// Get all request type configurations
+export const getRequestTypeConfigs = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const schoolId = req.user?.schoolId;
+    const { category, isActive } = req.query;
+
+    const query: any = { schoolId };
+    
+    if (category) {
+      query.category = category;
+    }
+    
+    if (isActive !== undefined) {
+      query.isActive = isActive === 'true';
+    }
+
+    const configs = await RequestTypeConfig.find(query).sort({ category: 1, name: 1 });
+
+    res.json({ success: true, data: configs });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Get single request type configuration
+export const getRequestTypeConfig = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const config = await RequestTypeConfig.findById(id);
+
+    if (!config) {
+      res.status(404).json({ success: false, message: 'Configuration not found' });
+      return;
+    }
+
+    res.json({ success: true, data: config });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Create request type configuration
+export const createRequestTypeConfig = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const schoolId = req.user?.schoolId;
+    const configData = { ...req.body, schoolId };
+
+    // Check if code already exists for this school
+    const existing = await RequestTypeConfig.findOne({
+      schoolId,
+      code: configData.code,
+    });
+
+    if (existing) {
+      res.status(400).json({ 
+        success: false, 
+        message: `A request type with code '${configData.code}' already exists` 
+      });
+      return;
+    }
+
+    const config = await RequestTypeConfig.create(configData);
+
+    res.status(201).json({ 
+      success: true, 
+      data: config,
+      message: 'Request type configuration created successfully' 
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Update request type configuration
+export const updateRequestTypeConfig = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+
+    const config = await RequestTypeConfig.findByIdAndUpdate(
+      id,
+      updateData,
+      { new: true, runValidators: true }
+    );
+
+    if (!config) {
+      res.status(404).json({ success: false, message: 'Configuration not found' });
+      return;
+    }
+
+    res.json({ 
+      success: true, 
+      data: config,
+      message: 'Request type configuration updated successfully' 
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Delete request type configuration
+export const deleteRequestTypeConfig = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    const config = await RequestTypeConfig.findByIdAndDelete(id);
+
+    if (!config) {
+      res.status(404).json({ success: false, message: 'Configuration not found' });
+      return;
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'Request type configuration deleted successfully' 
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Check eligibility for a request type
+export const checkRequestEligibility = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { configId } = req.params;
+    const userId = req.user?.id;
+    const schoolId = req.user?.schoolId;
+    const userRole = req.user?.role;
+
+    const config = await RequestTypeConfig.findById(configId);
+    
+    if (!config) {
+      res.status(404).json({ success: false, message: 'Configuration not found' });
+      return;
+    }
+
+    const errors: string[] = [];
+
+    // Check role eligibility
+    if (config.eligibleRoles.length > 0 && !config.eligibleRoles.includes(userRole || '')) {
+      errors.push(`Your role (${userRole}) is not eligible for this request type`);
+    }
+
+    // Check service duration (if staff)
+    if (config.minimumServiceMonths > 0) {
+      const staff = await Staff.findOne({ userId, schoolId });
+      
+      if (staff && staff.dateOfJoining) {
+        const monthsOfService = Math.floor(
+          (new Date().getTime() - new Date(staff.dateOfJoining).getTime()) / 
+          (1000 * 60 * 60 * 24 * 30)
+        );
+        
+        if (monthsOfService < config.minimumServiceMonths) {
+          errors.push(
+            `Minimum service requirement: ${config.minimumServiceMonths} months. ` +
+            `You have: ${monthsOfService} months`
+          );
+        }
+      }
+    }
+
+    // Check probation completion
+    if (config.requiresProbationCompletion) {
+      const staff = await Staff.findOne({ userId, schoolId });
+      
+      if (staff && staff.probationEndDate) {
+        const isProbationComplete = new Date() > new Date(staff.probationEndDate);
+        
+        if (!isProbationComplete) {
+          errors.push(
+            `Probation must be completed. Probation ends on: ` +
+            `${new Date(staff.probationEndDate).toLocaleDateString()}`
+          );
+        }
+      }
+    }
+
+    const isEligible = errors.length === 0;
+
+    res.json({ 
+      success: true, 
+      data: {
+        isEligible,
+        config: {
+          code: config.code,
+          name: config.name,
+          category: config.category,
+        },
+        errors: isEligible ? [] : errors,
+        requirements: {
+          eligibleRoles: config.eligibleRoles,
+          minimumServiceMonths: config.minimumServiceMonths,
+          requiresProbationCompletion: config.requiresProbationCompletion,
+        }
+      }
+    });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }
