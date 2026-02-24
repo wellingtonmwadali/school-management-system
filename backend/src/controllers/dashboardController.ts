@@ -186,3 +186,172 @@ export const getStudentDashboard = async (req: AuthRequest, res: Response): Prom
     },
   });
 };
+
+export const getTopPerformingStudents = async (req: AuthRequest, res: Response): Promise<void> => {
+  const schoolId = req.user?.schoolId;
+  const mongoose = require('mongoose');
+  const sid = new mongoose.Types.ObjectId(schoolId);
+  const limit = parseInt(req.query.limit as string) || 20;
+  const classFilter = req.query.class as string;
+
+  try {
+    // Build match pipeline
+    const matchStage: any = { schoolId: sid };
+
+    // Aggregate marks to find top performing students
+    const topStudents = await Mark.aggregate([
+      { $match: matchStage },
+      {
+        $group: {
+          _id: '$studentId',
+          totalMarks: { $sum: '$marksObtained' },
+          totalPossible: { $sum: '$totalMarks' },
+          subjects: { $sum: 1 },
+          avgPercentage: {
+            $avg: {
+              $multiply: [
+                { $divide: ['$marksObtained', '$totalMarks'] },
+                100
+              ]
+            }
+          }
+        }
+      },
+      {
+        $lookup: {
+          from: 'students',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'student'
+        }
+      },
+      { $unwind: '$student' },
+      // Apply class filter if provided
+      ...(classFilter ? [{ $match: { 'student.currentClass': classFilter } }] : []),
+      { $sort: { avgPercentage: -1 } },
+      { $limit: limit },
+      {
+        $project: {
+          _id: 1,
+          firstName: '$student.firstName',
+          lastName: '$student.lastName',
+          admissionNumber: '$student.admissionNumber',
+          currentClass: '$student.currentClass',
+          currentStream: '$student.currentStream',
+          photo: '$student.photo',
+          avgPercentage: { $round: ['$avgPercentage', 1] },
+          totalMarks: 1,
+          totalPossible: 1,
+          subjects: 1,
+          grade: {
+            $switch: {
+              branches: [
+                { case: { $gte: ['$avgPercentage', 80] }, then: 'A' },
+                { case: { $gte: ['$avgPercentage', 70] }, then: 'B' },
+                { case: { $gte: ['$avgPercentage', 60] }, then: 'C' },
+                { case: { $gte: ['$avgPercentage', 50] }, then: 'D' },
+              ],
+              default: 'E'
+            }
+          }
+        }
+      }
+    ]);
+
+    res.json({
+      success: true,
+      data: topStudents,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch top performing students',
+      error: error.message,
+    });
+  }
+};
+
+export const getTopPerformingClasses = async (req: AuthRequest, res: Response): Promise<void> => {
+  const schoolId = req.user?.schoolId;
+  const mongoose = require('mongoose');
+  const sid = new mongoose.Types.ObjectId(schoolId);
+
+  try {
+    // Aggregate marks by class to find top performing classes
+    const topClasses = await Mark.aggregate([
+      { $match: { schoolId: sid } },
+      {
+        $lookup: {
+          from: 'students',
+          localField: 'studentId',
+          foreignField: '_id',
+          as: 'student'
+        }
+      },
+      { $unwind: '$student' },
+      {
+        $group: {
+          _id: {
+            class: '$student.currentClass',
+            stream: '$student.currentStream'
+          },
+          totalMarks: { $sum: '$marksObtained' },
+          totalPossible: { $sum: '$totalMarks' },
+          studentCount: { $addToSet: '$studentId' },
+          avgPercentage: {
+            $avg: {
+              $multiply: [
+                { $divide: ['$marksObtained', '$totalMarks'] },
+                100
+              ]
+            }
+          }
+        }
+      },
+      {
+        $project: {
+          _id: 1,
+          class: '$_id.class',
+          stream: '$_id.stream',
+          avgPercentage: { $round: ['$avgPercentage', 1] },
+          studentCount: { $size: '$studentCount' },
+          totalMarks: 1,
+          totalPossible: 1,
+        }
+      },
+      { $sort: { avgPercentage: -1 } },
+      { $limit: 10 },
+    ]);
+
+    // Get class teachers for each class
+    const classesWithTeachers = await Promise.all(
+      topClasses.map(async (cls: any) => {
+        const classTeacher = await Staff.findOne({
+          schoolId,
+          classTeacherOf: cls.stream,
+          isActive: true
+        }).select('firstName lastName photo designation');
+
+        return {
+          ...cls,
+          teacher: classTeacher ? {
+            name: `${classTeacher.firstName} ${classTeacher.lastName}`,
+            photo: classTeacher.photo,
+            designation: classTeacher.designation
+          } : null
+        };
+      })
+    );
+
+    res.json({
+      success: true,
+      data: classesWithTeachers,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch top performing classes',
+      error: error.message,
+    });
+  }
+};

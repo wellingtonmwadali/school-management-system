@@ -710,9 +710,9 @@ export const checkRequestEligibility = async (req: AuthRequest, res: Response): 
     if (config.minimumServiceMonths > 0) {
       const staff = await Staff.findOne({ userId, schoolId });
       
-      if (staff && staff.dateOfJoining) {
+      if (staff && staff.employmentDate) {
         const monthsOfService = Math.floor(
-          (new Date().getTime() - new Date(staff.dateOfJoining).getTime()) / 
+          (new Date().getTime() - new Date(staff.employmentDate).getTime()) / 
           (1000 * 60 * 60 * 24 * 30)
         );
         
@@ -725,17 +725,21 @@ export const checkRequestEligibility = async (req: AuthRequest, res: Response): 
       }
     }
 
-    // Check probation completion
+    // Check probation completion (assuming standard 6-month probation period)
     if (config.requiresProbationCompletion) {
       const staff = await Staff.findOne({ userId, schoolId });
       
-      if (staff && staff.probationEndDate) {
-        const isProbationComplete = new Date() > new Date(staff.probationEndDate);
+      if (staff && staff.employmentDate) {
+        // Calculate probation end date (6 months from employment date)
+        const probationEndDate = new Date(staff.employmentDate);
+        probationEndDate.setMonth(probationEndDate.getMonth() + 6);
+        
+        const isProbationComplete = new Date() > probationEndDate;
         
         if (!isProbationComplete) {
           errors.push(
             `Probation must be completed. Probation ends on: ` +
-            `${new Date(staff.probationEndDate).toLocaleDateString()}`
+            `${probationEndDate.toLocaleDateString()}`
           );
         }
       }

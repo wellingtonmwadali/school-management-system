@@ -18,7 +18,7 @@ import {
   getUsers, toggleUserStatus,
   getDailyQuote, getQuotes, createQuote,
 } from '../controllers/otherControllers';
-import { getPrincipalDashboard, getFinanceDashboard, getTeacherDashboard, getStudentDashboard } from '../controllers/dashboardController';
+import { getPrincipalDashboard, getFinanceDashboard, getTeacherDashboard, getStudentDashboard, getTopPerformingStudents, getTopPerformingClasses } from '../controllers/dashboardController';
 import { clockIn, clockOut, getStaffAttendance, getMyAttendance, getTodayStatus } from '../controllers/staffAttendanceController';
 import { getTimetable, getUpcomingClasses, uploadTimetable, addTimetableEntry } from '../controllers/timetableController';
 import { getClassAssignments, assignClassTeacher, removeClassAssignment, getMyClassAssignment } from '../controllers/classAssignmentController';
@@ -70,6 +70,8 @@ router.get('/dashboard/principal', protect, cacheHelper.short, getPrincipalDashb
 router.get('/dashboard/finance', protect, cacheHelper.short, getFinanceDashboard);
 router.get('/dashboard/teacher', protect, cacheHelper.short, getTeacherDashboard);
 router.get('/dashboard/student', protect, cacheHelper.short, getStudentDashboard);
+router.get('/dashboard/top-students', protect, cacheHelper.medium, getTopPerformingStudents);
+router.get('/dashboard/top-classes', protect, cacheHelper.medium, getTopPerformingClasses);
 
 // Config
 router.get('/config', protect, cacheHelper.long, getConfig);
