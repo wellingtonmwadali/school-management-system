@@ -18,19 +18,11 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('🔐 Login attempt started');
-    console.log('📧 Email:', email);
-    console.log('🔑 Password length:', password.length);
-    
     try {
-      console.log('🌐 Calling login API...');
       await login(email, password);
-      console.log('✅ Login successful, redirecting to dashboard');
       router.push('/dashboard');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Login failed';
-      console.error('❌ Login failed:', err);
-      console.error('📝 Error message:', message);
       toast({ title: 'Login Failed', description: message, variant: 'destructive' });
     }
   };
