@@ -13,31 +13,64 @@ const generateToken = (user: IUser): string => {
 };
 
 export const login = async (req: Request, res: Response): Promise<void> => {
+  console.log('🔐 ============================================');
+  console.log('🔐 LOGIN REQUEST RECEIVED');
+  console.log('🔐 ============================================');
+  
   const { email, password } = req.body;
+  console.log('📧 Email:', email);
+  console.log('🔑 Password provided:', !!password);
+  console.log('🔑 Password length:', password?.length || 0);
 
   if (!email || !password) {
+    console.log('❌ Validation failed: Missing email or password');
     res.status(400).json({ success: false, message: 'Please provide email and password' });
     return;
   }
 
+  console.log('🔍 Looking up user in database...');
   const user = await User.findOne({ email }).select('+password');
 
-  if (!user || !(await user.comparePassword(password))) {
+  if (!user) {
+    console.log('❌ User not found with email:', email);
     res.status(401).json({ success: false, message: 'Invalid credentials' });
     return;
   }
 
+  console.log('✅ User found:', user.firstName, user.lastName);
+  console.log('👤 User ID:', user._id);
+  console.log('🎭 User role:', user.role);
+  console.log('🏫 School ID:', user.schoolId);
+
+  console.log('🔐 Comparing password...');
+  const passwordMatch = await user.comparePassword(password);
+  console.log('🔐 Password match:', passwordMatch);
+
+  if (!passwordMatch) {
+    console.log('❌ Password comparison failed');
+    res.status(401).json({ success: false, message: 'Invalid credentials' });
+    return;
+  }
+
+  console.log('🔍 Checking if user is active...');
+  console.log('✅ User active status:', user.isActive);
+
   if (!user.isActive) {
+    console.log('❌ Account is deactivated');
     res.status(403).json({ success: false, message: 'Account is deactivated' });
     return;
   }
 
+  console.log('💾 Updating last login timestamp...');
   user.lastLogin = new Date();
   await user.save({ validateBeforeSave: false });
+  console.log('✅ Last login updated');
 
+  console.log('🎟️ Generating JWT token...');
   const token = generateToken(user);
+  console.log('✅ Token generated (length):', token.length);
 
-  res.json({
+  const responseData = {
     success: true,
     token,
     user: {
@@ -49,7 +82,15 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       schoolId: user.schoolId,
       avatar: user.avatar,
     },
-  });
+  };
+
+  console.log('📤 Sending success response');
+  console.log('👤 Response user data:', responseData.user);
+  console.log('🔐 ============================================');
+  console.log('🔐 LOGIN SUCCESSFUL');
+  console.log('🔐 ============================================');
+
+  res.json(responseData);
 };
 
 export const getMe = async (req: AuthRequest, res: Response): Promise<void> => {

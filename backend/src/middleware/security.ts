@@ -25,15 +25,26 @@ export const securityHeaders = helmet({
 // CORS configuration
 export const corsOptions = cors({
   origin: (origin, callback) => {
+    console.log('🔒 ============================================');
+    console.log('🔒 CORS CHECK');
+    console.log('🔒 ============================================');
+    console.log('🌍 Request Origin:', origin || 'No origin (same-origin or tool)');
+    
     const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [
       'http://localhost:3010',
       'http://localhost:3000',
     ];
     
+    console.log('✅ Allowed Origins:', allowedOrigins);
+    
     // Allow requests with no origin (mobile apps, Postman, etc.)
     if (!origin || allowedOrigins.includes(origin)) {
+      console.log('✅ CORS: Request allowed');
+      console.log('🔒 ============================================');
       callback(null, true);
     } else {
+      console.log('❌ CORS: Request BLOCKED - Origin not in allowed list');
+      console.log('🔒 ============================================');
       callback(new AppError('Not allowed by CORS', 403));
     }
   },

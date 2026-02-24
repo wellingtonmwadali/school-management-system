@@ -36,6 +36,19 @@ export const authLimiter = rateLimit({
   skipSuccessfulRequests: true,
   standardHeaders: true,
   legacyHeaders: false,
+  handler: (req, res) => {
+    console.log('🚫 ============================================');
+    console.log('🚫 RATE LIMIT EXCEEDED');
+    console.log('🚫 ============================================');
+    console.log('🚫 IP:', req.ip);
+    console.log('🚫 Path:', req.path);
+    console.log('🚫 Message: Too many login attempts');
+    console.log('🚫 ============================================');
+    res.status(429).json({
+      success: false,
+      message: 'Too many login attempts, please try again after 15 minutes.',
+    });
+  },
   ...(redisClient && {
     store: new RedisStore({
       // @ts-ignore

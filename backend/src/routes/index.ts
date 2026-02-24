@@ -44,6 +44,21 @@ import multer from 'multer';
 const upload = multer({ storage: multer.memoryStorage() });
 const router = Router();
 
+// Logging middleware for all routes
+router.use((req, res, next) => {
+  console.log('🌐 ============================================');
+  console.log('🌐 INCOMING REQUEST');
+  console.log('🌐 ============================================');
+  console.log('📍 Method:', req.method);
+  console.log('📍 Path:', req.path);
+  console.log('📍 Full URL:', req.originalUrl);
+  console.log('📍 Origin:', req.get('origin') || 'Not provided');
+  console.log('📍 Content-Type:', req.get('content-type') || 'Not provided');
+  console.log('📦 Body:', JSON.stringify(req.body));
+  console.log('🌐 ============================================');
+  next();
+});
+
 // Auth (public)
 router.post('/auth/login', authLimiter, validateLogin, login);
 router.post('/auth/setup', authLimiter, validateRegister, createSchoolAndAdmin);
