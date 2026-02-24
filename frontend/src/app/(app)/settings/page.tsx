@@ -1091,11 +1091,7 @@ function ApproversTab() {
 
                 <Button 
                   onClick={handleBulkSetApprover} 
-                  disabled={
-                    setBulkApproverMutation.isPending || 
-                    !bulkApproverId || 
-                    (selectedClass && selectedStream && getStudentsInClass().length === 0)
-                  }
+                  disabled={setBulkApproverMutation.isPending || !bulkApproverId || (selectedClass && selectedStream && getStudentsInClass().length === 0)}
                 >
                   {setBulkApproverMutation.isPending ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Plus size={16} className="mr-2" />}
                   Set for {selectAllStaff ? `All Staff (${staff?.length})` : (selectedClass && selectedStream) ? `${selectedClass} ${selectedStream} (${getStudentsInClass().length})` : selectAllStudents ? `All Students (${students?.length})` : `Selected (${selectedSubjects.length})`}
