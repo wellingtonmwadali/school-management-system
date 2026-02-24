@@ -594,28 +594,8 @@ function ApproversTab() {
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
   const [selectAllStaff, setSelectAllStaff] = useState(false);
   const [selectAllStudents, setSelectAllStudents] = useState(false);
-
-  // Debug: Log state changes
-  console.log('📊 ApproversTab render:', {
-    bulkMode,
-    selectedStaffIds,
-    singleApproverId,
-    bulkApproverId,
-    selectedSubjects
-  });
-
-  // Monitor state changes
-  useEffect(() => {
-    console.log('⚡ selectedStaffIds changed:', selectedStaffIds);
-  }, [selectedStaffIds]);
-
-  useEffect(() => {
-    console.log('⚡ singleApproverId changed:', singleApproverId);
-  }, [singleApproverId]);
-
-  useEffect(() => {
-    console.log('⚡ bulkApproverId changed:', bulkApproverId);
-  }, [bulkApproverId]);
+  const [selectedClass, setSelectedClass] = useState(''); // For student class selection
+  const [selectedStream, setSelectedStream] = useState(''); // For student stream selection
 
   const { data: approvers } = useQuery({
     queryKey: ['approvers'],
@@ -626,15 +606,6 @@ function ApproversTab() {
     queryKey: ['staff-list'],
     queryFn: async () => { 
       const res = await api.get('/staff'); 
-      console.log('👥 Staff data loaded:', {
-        count: res.data.data?.length,
-        sample: res.data.data?.slice(0, 2).map((s: any) => ({
-          _id: s._id,
-          name: `${s.firstName} ${s.lastName}`,
-          userId: s.userId?._id,
-          hasUserId: !!s.userId
-        }))
-      });
       return res.data.data; 
     },
   });
@@ -664,6 +635,8 @@ function ApproversTab() {
       setBulkApproverId('');
       setSelectAllStaff(false);
       setSelectAllStudents(false);
+      setSelectedClass('');
+      setSelectedStream('');
     },
     onError: () => toast({ title: 'Error', description: 'Failed to set bulk approvers', variant: 'destructive' }),
   });
@@ -717,6 +690,14 @@ function ApproversTab() {
           subjects.push({ id: s._id.trim(), model: 'Staff' });
         }
       });
+    } else if (selectedClass && selectedStream) {
+      // Class-based student selection
+      const studentsInClass = getStudentsInClass();
+      studentsInClass.forEach((s: any) => {
+        if (s._id && s._id.trim() !== '') {
+          subjects.push({ id: s._id.trim(), model: 'Student' });
+        }
+      });
     } else if (selectAllStudents) {
       students?.forEach((s: any) => {
         if (s._id && s._id.trim() !== '') {
@@ -742,26 +723,20 @@ function ApproversTab() {
   };
 
   const toggleSubjectSelection = (id: string, e?: React.ChangeEvent<HTMLInputElement>) => {
-    console.log('🟢 toggleSubjectSelection called:', { id, checked: e?.target.checked });
     if (e) {
       e.stopPropagation();
     }
     setSelectedSubjects(prev => {
-      const newSelection = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
-      console.log('🟢 Subject selection updated:', { prev, newSelection });
-      return newSelection;
+      return prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
     });
   };
 
   const toggleStaffSelection = (id: string, e?: React.ChangeEvent<HTMLInputElement>) => {
-    console.log('🔵 toggleStaffSelection called:', { id, checked: e?.target.checked });
     if (e) {
       e.stopPropagation();
     }
     setSelectedStaffIds(prev => {
-      const newSelection = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
-      console.log('🔵 Staff selection updated:', { prev, newSelection });
-      return newSelection;
+      return prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
     });
   };
 
@@ -775,6 +750,41 @@ function ApproversTab() {
     setSelectAllStudents(!selectAllStudents);
     setSelectAllStaff(false);
     setSelectedSubjects([]);
+  };
+
+  // Get students for selected class
+  const getStudentsInClass = () => {
+    if (!selectedClass || !selectedStream) return [];
+    return students?.filter((s: any) => 
+      s.currentClass === selectedClass && s.currentStream === selectedStream
+    ) || [];
+  };
+
+  // Get class teacher for selected class
+  const getClassTeacher = () => {
+    if (!selectedClass || !selectedStream) return null;
+    const classStr = `${selectedClass} ${selectedStream}`;
+    return staff?.find((s: any) => s.classTeacherOf === classStr);
+  };
+
+  // Get unique classes from students
+  const getUniqueClasses = () => {
+    const classes = new Set<string>();
+    students?.forEach((s: any) => {
+      if (s.currentClass) classes.add(s.currentClass);
+    });
+    return Array.from(classes).sort();
+  };
+
+  // Get streams for selected class
+  const getStreamsForClass = () => {
+    if (!selectedClass) return [];
+    const streams = new Set<string>();
+    students?.filter((s: any) => s.currentClass === selectedClass)
+      .forEach((s: any) => {
+        if (s.currentStream) streams.add(s.currentStream);
+      });
+    return Array.from(streams).sort();
   };
 
   return (
@@ -855,23 +865,7 @@ function ApproversTab() {
                 <Select 
                   key="single-mode-approver-select"
                   value={String(singleApproverId || '')} 
-                  onValueChange={(value) => {
-                    console.log('🟡 Single approver changed:', { 
-                      value, 
-                      type: typeof value,
-                      isArray: Array.isArray(value),
-                      currentStaffIds: selectedStaffIds 
-                    });
-                    setSingleApproverId(String(value));
-                  }}
-                  onOpenChange={(open) => {
-                    console.log('🟡 Single approver dropdown toggled:', { 
-                      open, 
-                      currentValue: singleApproverId,
-                      selectedStaffIds,
-                      staffCount: staff?.length
-                    });
-                  }}
+                  onValueChange={(value) => setSingleApproverId(String(value))}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select Approver" />
@@ -879,17 +873,6 @@ function ApproversTab() {
                   <SelectContent>
                     {staff?.filter((s: any) => s.userId).map((s: any) => {
                       const itemValue = String(s.userId._id || s.userId);
-                      const isSelected = itemValue === singleApproverId;
-                      console.log('🔶 Rendering single approver item:', { 
-                        name: `${s.firstName} ${s.lastName}`, 
-                        userId: itemValue,
-                        rawUserId: s.userId,
-                        userIdType: typeof s.userId,
-                        isSelected,
-                        currentValue: singleApproverId,
-                        valueType: typeof itemValue,
-                        isInStaffSelection: selectedStaffIds.includes(s._id)
-                      });
                       return (
                         <SelectItem key={`single-approver-${itemValue}`} value={itemValue}>
                           {s.firstName} {s.lastName}
@@ -926,18 +909,64 @@ function ApproversTab() {
                   />
                   <span className="text-sm font-medium">Select All Staff ({staff?.length || 0})</span>
                 </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input 
-                    type="checkbox" 
-                    checked={selectAllStudents} 
-                    onChange={handleSelectAllStudents}
-                    className="h-4 w-4"
-                  />
-                  <span className="text-sm font-medium">Select All Students ({students?.length || 0})</span>
-                </label>
               </div>
 
-              {!selectAllStaff && !selectAllStudents && (
+              {/* Class-based Student Selection */}
+              <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <h4 className="text-sm font-medium mb-3">Assign Class Teacher for Students</h4>
+                <div className="grid grid-cols-3 gap-3 mb-3">
+                  <div>
+                    <Label className="text-xs">Select Class</Label>
+                    <Select value={selectedClass} onValueChange={(val) => {
+                      setSelectedClass(val);
+                      setSelectedStream('');
+                      setSelectAllStudents(false);
+                      setBulkApproverId('');
+                    }}>
+                      <SelectTrigger><SelectValue placeholder="Choose Class" /></SelectTrigger>
+                      <SelectContent>
+                        {getUniqueClasses().map((cls) => (
+                          <SelectItem key={cls} value={cls}>{cls}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Select Stream</Label>
+                    <Select value={selectedStream} onValueChange={(val) => {
+                      setSelectedStream(val);
+                      setSelectAllStudents(false);
+                      // Auto-set class teacher
+                      const classTeacher = staff?.find((s: any) => s.classTeacherOf === `${selectedClass} ${val}`);
+                      if (classTeacher && classTeacher.userId) {
+                        setBulkApproverId(String(classTeacher.userId._id || classTeacher.userId));
+                      }
+                    }} disabled={!selectedClass}>
+                      <SelectTrigger><SelectValue placeholder="Choose Stream" /></SelectTrigger>
+                      <SelectContent>
+                        {getStreamsForClass().map((stream) => (
+                          <SelectItem key={stream} value={stream}>{stream}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Class Teacher</Label>
+                    <Input 
+                      value={getClassTeacher() ? `${getClassTeacher()?.firstName} ${getClassTeacher()?.lastName}` : 'Not assigned'} 
+                      disabled 
+                      className="bg-gray-100"
+                    />
+                  </div>
+                </div>
+                {selectedClass && selectedStream && (
+                  <div className="text-sm text-blue-700">
+                    <strong>{getStudentsInClass().length}</strong> student(s) in {selectedClass} {selectedStream}
+                  </div>
+                )}
+              </div>
+
+              {!selectAllStaff && !selectAllStudents && !selectedClass && (
                 /* Individual Selection */
                 <div className="mb-4 max-h-[300px] overflow-y-auto border rounded p-3">
                   <p className="text-sm font-medium mb-2">Select Individuals:</p>
@@ -985,25 +1014,12 @@ function ApproversTab() {
                 <Select 
                   key="bulk-mode-approver-select"
                   value={String(bulkApproverId || '')} 
-                  onValueChange={(value) => {
-                    console.log('🟢 Bulk approver changed:', { 
-                      value, 
-                      type: typeof value,
-                      isArray: Array.isArray(value)
-                    });
-                    setBulkApproverId(String(value));
-                  }}
+                  onValueChange={(value) => setBulkApproverId(String(value))}
                 >
                   <SelectTrigger><SelectValue placeholder="Select Approver" /></SelectTrigger>
                   <SelectContent>
                     {staff?.filter((s: any) => s.userId).map((s: any) => {
                       const itemValue = String(s.userId._id || s.userId);
-                      console.log('🟢 Rendering bulk approver item:', {
-                        name: `${s.firstName} ${s.lastName}`,
-                        userId: itemValue,
-                        rawUserId: s.userId,
-                        userIdType: typeof s.userId
-                      });
                       return (
                         <SelectItem key={`bulk-approver-${itemValue}`} value={itemValue}>
                           {s.firstName} {s.lastName}
@@ -1015,7 +1031,7 @@ function ApproversTab() {
 
                 <Button onClick={handleBulkSetApprover} disabled={setBulkApproverMutation.isPending || !bulkApproverId}>
                   {setBulkApproverMutation.isPending ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Plus size={16} className="mr-2" />}
-                  Set for {selectAllStaff ? `All Staff (${staff?.length})` : selectAllStudents ? `All Students (${students?.length})` : `Selected (${selectedSubjects.length})`}
+                  Set for {selectAllStaff ? `All Staff (${staff?.length})` : (selectedClass && selectedStream) ? `${selectedClass} ${selectedStream} (${getStudentsInClass().length})` : selectAllStudents ? `All Students (${students?.length})` : `Selected (${selectedSubjects.length})`}
                 </Button>
               </div>
             </div>

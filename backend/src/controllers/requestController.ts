@@ -50,6 +50,7 @@ export const createRequest = async (req: AuthRequest, res: Response): Promise<vo
     // Get subject details
     let subjectModel = 'Staff';
     let subjectName = '';
+    let actualSubjectId = subjectId; // Use from request body by default (for students)
     
     if (requestFor === 'student') {
       subjectModel = 'Student';
@@ -59,6 +60,7 @@ export const createRequest = async (req: AuthRequest, res: Response): Promise<vo
         return;
       }
       subjectName = `${student.firstName} ${student.lastName}`;
+      actualSubjectId = student._id.toString();
     } else {
       const staff = await Staff.findOne({ userId, schoolId });
       if (!staff) {
@@ -67,12 +69,13 @@ export const createRequest = async (req: AuthRequest, res: Response): Promise<vo
       }
       subjectModel = 'Staff';
       subjectName = `${staff.firstName} ${staff.lastName}`;
+      actualSubjectId = staff._id.toString();
     }
 
     // Find approver
     const approverSetting = await ApproverSetting.findOne({
       schoolId,
-      subjectId,
+      subjectId: actualSubjectId,
       $or: [{ requestType }, { requestType: 'all' }],
       isActive: true,
     });
@@ -116,7 +119,7 @@ export const createRequest = async (req: AuthRequest, res: Response): Promise<vo
       const academicYear = new Date().getFullYear().toString();
       const leaveBalance = await LeaveBalance.findOne({
         schoolId,
-        staffId: subjectId,
+        staffId: actualSubjectId,
         academicYear,
       });
 
@@ -142,7 +145,7 @@ export const createRequest = async (req: AuthRequest, res: Response): Promise<vo
       requestedBy: userId,
       requestedByModel,
       requestedByName,
-      subjectId,
+      subjectId: actualSubjectId,
       subjectModel,
       subjectName,
       title,
