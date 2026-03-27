@@ -77,3 +77,8 @@
     scrollbar-color: hsl(var(--border)) transparent;
   }
 }
+
+/* Landing page smooth scroll */
+html {
+  scroll-behavior: smooth;
+}
